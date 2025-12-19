@@ -21,6 +21,7 @@ export default function Navbar() {
     { name: "Reports", path: "/reports" },
     { name: "PM Guide", path: "/pm-guide" },
     { name: "Metabase", path: "/metabase" },
+    { name: "Storyteller", path: "/storyteller" },
   ];
 
   return (
