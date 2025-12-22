@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
-  console.log("--> [Cron] Data Source Job Started (v2025-09-03)");
+  console.log("--> [Cron] Data Source Job Started (All Projects)");
 
   // 1. 보안 체크
   const authHeader = request.headers.get("authorization");
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 2. Data Source Query (필터 없이 조회 -> 로그 확인용)
+    // 2. Data Source Query (필터 없이 조회)
     // ---------------------------------------------------------
     const allPages: any[] = [];
 
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
           {
             method: "POST",
             headers,
-            // [중요] 필터를 잠시 뺐습니다! (일단 다 가져와서 속성 이름을 확인하기 위함)
+            // 필터 없이 모든 데이터를 가져옵니다.
             body: JSON.stringify({}),
           }
         );
@@ -82,42 +82,25 @@ export async function GET(request: Request) {
 
     console.log(`Total Pages Found (No Filter): ${allPages.length}`);
 
-    if (allPages.length > 0) {
-      // [진단 로그] 첫 번째 페이지의 속성(Properties)을 통째로 출력
-      // 이걸 보면 "Status"인지 "상태"인지, "진행 중"인지 확실히 알 수 있습니다.
-      console.log(
-        "--> [DEBUG] First Page Properties:",
-        JSON.stringify(allPages[0].properties, null, 2)
-      );
-    }
-
     // ---------------------------------------------------------
-    // 3. 필터링 (코드 내부에서 수행)
+    // 3. 필터링 (Status 체크 제거 -> GroupID 존재 여부만 확인)
     // ---------------------------------------------------------
-    // API 필터 대신 가져온 데이터에서 직접 찾습니다. (이게 훨씬 확실합니다)
+    // 기존의 "진행중" 상태 체크 로직을 삭제했습니다.
+    // 대신 API 요청에 필수적인 GroupID가 있는지만 확인하여 대상을 선정합니다.
     const targetProjects = allPages.filter((page: any) => {
       const props = page.properties;
+      const groupProp =
+        props["GroupID"] || props["Group ID"] || props["그룹ID"];
 
-      // 1. 상태값 확인 (유연하게 체크)
-      const statusProp = props["Status"] || props["상태"] || props["status"];
-      let statusValue = "";
+      // GroupID가 유효한 값을 가지고 있는지 확인
+      if (groupProp?.number) return true;
+      if (groupProp?.rich_text?.[0]?.plain_text) return true;
+      if (groupProp?.title?.[0]?.plain_text) return true;
 
-      if (statusProp?.status) statusValue = statusProp.status.name;
-      else if (statusProp?.select) statusValue = statusProp.select.name;
-
-      // 2. 진행중 여부 체크 (띄어쓰기 등 모든 케이스 포함)
-      const isActive = [
-        "진행중",
-        "진행 중",
-        "In Progress",
-        "Active",
-        "Running",
-      ].includes(statusValue);
-
-      return isActive;
+      return false;
     });
 
-    console.log(`--> Filtered Active Projects: ${targetProjects.length}`);
+    console.log(`--> Target Projects (With GroupID): ${targetProjects.length}`);
 
     // ---------------------------------------------------------
     // 4. GroupID 추출 및 저장

@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Treemap, ResponsiveContainer, Tooltip } from "recharts";
 
 // ----------------------------------------------------------------------
-// 타입 정의
+// 타입 정의 (기존과 동일)
 // ----------------------------------------------------------------------
 
 interface SeriesPoint {
@@ -61,7 +61,25 @@ function generateSparklinePath(data: number[], width: number, height: number) {
 const CustomTreemapContent = (props: any) => {
   const { x, y, width, height, name, value, totalScore } = props;
   const itemData = props.itemData || props.payload?.itemData;
+
+  // 1. 아주 작은 영역은 렌더링 생략 (최소 50px)
   if (!itemData || width < 50 || height < 50) return null;
+
+  // ----------------------------------------------------------------------
+  // [Render Logic] 크기에 따른 정보 노출 단계 (Threshold 상향 조정)
+  // ----------------------------------------------------------------------
+  // [수정] 모바일 가독성을 위해 기준을 더 엄격하게 변경
+
+  // 1. Large: 모든 정보 표시 (Sparkline + Total Score)
+  // 기존: > 140x120 -> 변경: > 200x160 (확실히 클 때만 그래프 표시)
+  const isLarge = width > 140 && height > 140;
+
+  // 2. Medium: Total Score 표시 (Sparkline 제외)
+  // 기존: > 90x80 -> 변경: > 120x100 (이름과 점수가 겹치지 않을 최소 공간 확보)
+  const isMedium = !isLarge && width > 100 && height > 100;
+
+  // 3. Small: 아이콘 + %만 표시 (나머지 모든 경우)
+  const isSmall = !isLarge && !isMedium;
 
   const percentage = ((value / totalScore) * 100).toFixed(1);
   const dailySeries = itemData.dailySeries || [];
@@ -84,11 +102,10 @@ const CustomTreemapContent = (props: any) => {
   const drawWidth = width - gap;
   const drawHeight = height - gap;
 
-  const sparklinePath = generateSparklinePath(
-    dailyScores,
-    drawWidth - 32,
-    drawHeight * 0.25
-  );
+  // 그래프는 Large 상태일 때만 계산 및 렌더링
+  const sparklinePath = isLarge
+    ? generateSparklinePath(dailyScores, drawWidth - 32, drawHeight * 0.25)
+    : "";
 
   return (
     <foreignObject
@@ -99,7 +116,7 @@ const CustomTreemapContent = (props: any) => {
       style={{ overflow: "visible" }}
     >
       <div
-        className="w-full h-full rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl group relative overflow-hidden flex flex-col justify-between p-4"
+        className="w-full h-full rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl group relative overflow-hidden flex flex-col justify-between p-3"
         style={{
           background: `linear-gradient(135deg, rgba(255,255,255,0.3) 0%, ${tintColor} 100%)`,
           backdropFilter: "blur(12px)",
@@ -109,68 +126,111 @@ const CustomTreemapContent = (props: any) => {
         }}
       >
         <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
-        <div className="relative z-10 flex items-start gap-3">
-          {itemData.profileImageUrl && (
-            <div className="relative shrink-0">
-              <img
-                src={itemData.profileImageUrl}
-                alt=""
-                className="w-10 h-10 rounded-full object-cover shadow-sm ring-2 ring-white/60"
-              />
-              <div
-                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white/50 ${
-                  isGrowing ? "bg-emerald-400" : "bg-rose-400"
-                }`}
-              />
-            </div>
-          )}
-          <div className="min-w-0 flex-1 pt-0.5">
-            <p
-              className="text-[13px] font-bold text-gray-800 leading-tight truncate drop-shadow-sm"
-              title={name}
-            >
-              {name}
-            </p>
-            <div className="flex items-center gap-1.5 mt-1">
+
+        {/* 컨텐츠 영역 */}
+        <div
+          className={`relative z-10 w-full h-full flex ${
+            isSmall
+              ? "flex-col items-center justify-center gap-1" // Small: 중앙 정렬
+              : "flex-col justify-between" // Medium/Large: 상하 배치
+          }`}
+        >
+          {/* 상단 (아이콘 + 이름 + %) */}
+          <div
+            className={`flex ${
+              isSmall ? "flex-col items-center" : "items-start gap-2"
+            }`}
+          >
+            {/* 1. 프로필 이미지 */}
+            {itemData.profileImageUrl && (
+              <div className="relative shrink-0">
+                <img
+                  src={itemData.profileImageUrl}
+                  alt=""
+                  className={`${
+                    isSmall ? "w-8 h-8" : "w-10 h-10"
+                  } rounded-full object-cover shadow-sm ring-2 ring-white/60 transition-all`}
+                />
+                <div
+                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white/50 ${
+                    isGrowing ? "bg-emerald-400" : "bg-rose-400"
+                  }`}
+                />
+              </div>
+            )}
+
+            {/* 2. 텍스트 정보 (Small이 아닐 때만 표시) */}
+            {!isSmall && (
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p
+                  className="text-[13px] font-bold text-gray-800 leading-tight truncate drop-shadow-sm"
+                  title={name}
+                >
+                  {name}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span
+                    className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-md backdrop-blur-md shadow-sm ${
+                      isGrowing
+                        ? "bg-emerald-50/50 text-emerald-800"
+                        : "bg-rose-50/50 text-rose-800"
+                    }`}
+                  >
+                    {percentage}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* 3. Small 모드 전용 퍼센트 */}
+            {isSmall && (
               <span
-                className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-md backdrop-blur-md shadow-sm ${
+                className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full backdrop-blur-md shadow-sm mt-1 ${
                   isGrowing
-                    ? "bg-emerald-50/50 text-emerald-800"
-                    : "bg-rose-50/50 text-rose-800"
+                    ? "bg-emerald-50/80 text-emerald-800"
+                    : "bg-rose-50/80 text-rose-800"
                 }`}
               >
                 {percentage}%
               </span>
+            )}
+          </div>
+
+          {/* 4. 그래프 (Large 전용) */}
+          {isLarge && (
+            <div className="absolute bottom-4 left-4 right-4 h-1/4 pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity">
+              <svg width="100%" height="100%" overflow="visible">
+                <path
+                  d={sparklinePath}
+                  fill="none"
+                  stroke={sparklineColor}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="drop-shadow(0px 2px 2px rgba(0,0,0,0.1))"
+                />
+              </svg>
             </div>
-          </div>
+          )}
+
+          {/* 5. Total Score (Medium 이상 표시) */}
+          {!isSmall && (
+            <div className="relative z-10 text-right mt-auto">
+              <p className="text-[10px] uppercase tracking-wider text-gray-600 font-semibold mb-0.5 mix-blend-multiply">
+                Total Score
+              </p>
+              <p className="text-sm font-black text-gray-800 tabular-nums tracking-tight">
+                {Math.round(value).toLocaleString()}
+              </p>
+            </div>
+          )}
         </div>
-        <div className="absolute bottom-4 left-4 right-4 h-1/4 pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity">
-          <svg width="100%" height="100%" overflow="visible">
-            <path
-              d={sparklinePath}
-              fill="none"
-              stroke={sparklineColor}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              filter="drop-shadow(0px 2px 2px rgba(0,0,0,0.1))"
-            />
-          </svg>
-        </div>
-        {drawHeight > 100 && (
-          <div className="relative z-10 text-right mt-auto">
-            <p className="text-[10px] uppercase tracking-wider text-gray-600 font-semibold mb-0.5 mix-blend-multiply">
-              Total Score
-            </p>
-            <p className="text-sm font-black text-gray-800 tabular-nums tracking-tight">
-              {Math.round(value).toLocaleString()}
-            </p>
-          </div>
-        )}
       </div>
     </foreignObject>
   );
 };
+
+// ... (이하 CustomTooltip 및 StorytellerClient 컴포넌트는 기존과 동일하게 유지)
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
@@ -222,9 +282,6 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-// ----------------------------------------------------------------------
-// 메인 클라이언트 컴포넌트
-// ----------------------------------------------------------------------
 export default function StorytellerClient({
   apiDataMap: initialApiDataMap,
   notionTasks,
@@ -240,10 +297,8 @@ export default function StorytellerClient({
   const searchParams = useSearchParams();
   const queryGroupId = searchParams.get("groupId");
 
-  // 오늘 날짜 계산 (로컬 시간 기준 YYYY-MM-DD)
   const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
 
-  // [State] UI 상태
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [selectedGroupId, setSelectedGroupId] = useState<string>(
     queryGroupId && availableGroupIds.includes(queryGroupId)
@@ -251,11 +306,34 @@ export default function StorytellerClient({
       : availableGroupIds[0] || "63"
   );
 
-  // [State] 데이터 상태 (초기값: 서버에서 받은 최신 데이터)
   const [currentDataMap, setCurrentDataMap] = useState(initialApiDataMap);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // 1. URL 파라미터가 변경되면 탭 상태 동기화
+  const { activeIds, finishedIds } = useMemo(() => {
+    const activeStatuses = [
+      "진행중",
+      "In Progress",
+      "진행 중",
+      "Ongoing",
+      "Running",
+      "Active",
+    ];
+
+    const active: string[] = [];
+    const finished: string[] = [];
+
+    availableGroupIds.forEach((id) => {
+      const task = notionTasks.find((t) => t.groupId === id);
+      if (task && activeStatuses.includes(task.status)) {
+        active.push(id);
+      } else {
+        finished.push(id);
+      }
+    });
+
+    return { activeIds: active, finishedIds: finished };
+  }, [availableGroupIds, notionTasks]);
+
   useEffect(() => {
     if (queryGroupId && availableGroupIds.includes(queryGroupId)) {
       if (selectedGroupId !== queryGroupId) {
@@ -264,16 +342,13 @@ export default function StorytellerClient({
     }
   }, [queryGroupId, availableGroupIds, selectedGroupId]);
 
-  // 2. 탭 클릭 핸들러 (URL 변경)
   const handleTabClick = (id: string) => {
     setSelectedGroupId(id);
     router.push(`?groupId=${id}`, { scroll: false });
   };
 
-  // 3. [핵심] 날짜 변경 시 데이터 Fetching
   useEffect(() => {
     async function fetchHistory() {
-      // "오늘"을 선택하면 다시 서버에서 받은 최신 데이터(Props)를 사용
       if (selectedDate === todayStr) {
         setCurrentDataMap(initialApiDataMap);
         return;
@@ -281,21 +356,17 @@ export default function StorytellerClient({
 
       setIsLoadingHistory(true);
       try {
-        // [API 호출] 해당 날짜의 스냅샷 데이터 요청
-        // API Route: app/api/history/route.ts
         const res = await fetch(
           `/api/history?groupId=${selectedGroupId}&date=${selectedDate}`
         );
 
         if (res.ok) {
           const historyData = await res.json();
-          // 가져온 과거 데이터를 현재 데이터 맵에 업데이트
           setCurrentDataMap((prev) => ({
             ...prev,
             [selectedGroupId]: historyData,
           }));
         } else {
-          // 데이터가 없으면 경고 후 오늘 날짜로 복귀
           alert(`No data found for ${selectedDate}`);
           setSelectedDate(todayStr);
         }
@@ -310,14 +381,8 @@ export default function StorytellerClient({
     fetchHistory();
   }, [selectedDate, selectedGroupId, todayStr, initialApiDataMap]);
 
-  // ----------------------------------------------------------------------
-  // 렌더링 데이터 계산
-  // ----------------------------------------------------------------------
-
-  // 선택된 그룹의 현재 데이터 (최신 or 과거)
   const currentApiData = currentDataMap[selectedGroupId];
 
-  // 트리맵 데이터 가공
   const { treeMapData, totalScore } = useMemo(() => {
     if (!currentApiData?.channels) return { treeMapData: [], totalScore: 0 };
 
@@ -347,7 +412,6 @@ export default function StorytellerClient({
     return { treeMapData: data, totalScore: total };
   }, [currentApiData]);
 
-  // 간트 차트 (스케줄) 데이터 계산 - 스케줄은 항상 'Live' 데이터 사용
   const { startDate, totalDays, dateHeaders } = useMemo(() => {
     const baseDate = new Date();
     if (notionTasks.length === 0) {
@@ -376,7 +440,6 @@ export default function StorytellerClient({
       (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    // Headers
     const headers = [];
     for (let i = 0; i <= diffDays; i += 7) {
       const d = new Date(start);
@@ -410,7 +473,6 @@ export default function StorytellerClient({
   return (
     <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] font-sans selection:bg-indigo-100 selection:text-indigo-900">
       <main className="max-w-[1600px] mx-auto px-6 py-12">
-        {/* Header Section */}
         <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600">
@@ -422,7 +484,6 @@ export default function StorytellerClient({
           </div>
 
           <div className="flex flex-col md:flex-row items-end md:items-center gap-6">
-            {/* [New] Time Machine Date Picker */}
             <div className="flex flex-col items-end">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                 {selectedDate !== todayStr && (
@@ -456,28 +517,65 @@ export default function StorytellerClient({
               </div>
             </div>
 
-            {/* Project Tabs */}
-            <div className="flex flex-wrap gap-2 bg-white/50 p-1.5 rounded-xl border border-gray-200/60 backdrop-blur-sm">
-              {availableGroupIds.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => handleTabClick(id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${
-                    selectedGroupId === id
-                      ? "bg-white text-indigo-600 shadow-sm ring-1 ring-gray-100 scale-[1.02]"
-                      : "text-gray-500 hover:text-gray-900 hover:bg-gray-100/50"
-                  }`}
-                >
-                  {projectNames[id] || `Project #${id}`}
-                </button>
-              ))}
+            <div className="flex flex-col items-end gap-3 bg-white/50 p-2 rounded-xl border border-gray-200/60 backdrop-blur-sm min-w-[300px]">
+              {activeIds.length > 0 && (
+                <div className="w-full">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-1">
+                    Running
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    {activeIds.map((id) => (
+                      <button
+                        key={id}
+                        onClick={() => handleTabClick(id)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                          selectedGroupId === id
+                            ? "bg-white text-indigo-600 shadow-sm ring-1 ring-gray-100 scale-[1.02]"
+                            : "text-gray-500 hover:text-gray-900 hover:bg-gray-100/50"
+                        }`}
+                      >
+                        {projectNames[id] || `Project #${id}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {finishedIds.length > 0 && activeIds.length > 0 && (
+                <div className="w-full h-px bg-gray-200/50 my-0.5" />
+              )}
+
+              {finishedIds.length > 0 && (
+                <div className="w-full">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-1 text-right">
+                    Finished
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    {finishedIds.map((id) => (
+                      <button
+                        key={id}
+                        onClick={() => handleTabClick(id)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                          selectedGroupId === id
+                            ? "bg-gray-100 text-gray-600 shadow-inner ring-1 ring-gray-200/50"
+                            : "text-gray-400 hover:text-gray-600 hover:bg-gray-100/30"
+                        }`}
+                      >
+                        {projectNames[id] || `Project #${id}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* 1. Liquid Glass TreeMap */}
-        <div className="rounded-[40px] p-2 shadow-inner border border-white/50 mb-12 h-[700px] relative overflow-hidden bg-white/30">
-          {/* Loading Overlay */}
+        {/* 1. Liquid Glass TreeMap (Responsive Height) */}
+        <div
+          className="rounded-[40px] p-2 shadow-inner border border-white/50 mb-12 relative overflow-hidden bg-white/30 
+                     h-[1000px] md:h-[700px]"
+        >
           {isLoadingHistory && (
             <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-md flex flex-col items-center justify-center rounded-[32px] transition-all">
               <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
@@ -487,7 +585,6 @@ export default function StorytellerClient({
             </div>
           )}
 
-          {/* Background Watermark */}
           <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none opacity-[0.15] grayscale">
             <img
               src="/logo.png"
@@ -497,7 +594,6 @@ export default function StorytellerClient({
           </div>
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none rounded-[32px]" />
 
-          {/* Chart Area */}
           <div className="w-full h-full relative z-10">
             {treeMapData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -507,7 +603,7 @@ export default function StorytellerClient({
                   aspectRatio={1}
                   stroke="none"
                   fill="transparent"
-                  isAnimationActive={false} // 애니메이션 끔 (성능 최적화)
+                  isAnimationActive={false}
                   content={<CustomTreemapContent totalScore={totalScore} />}
                 >
                   <Tooltip content={<CustomTooltip />} cursor={false} />
@@ -524,7 +620,6 @@ export default function StorytellerClient({
           </div>
         </div>
 
-        {/* 2. Schedule Section (Gantt Chart) - Always Live Data */}
         <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-200/50 border border-white min-h-[500px]">
           <h2 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-3">
             🗓️ All Content Schedules
@@ -536,7 +631,6 @@ export default function StorytellerClient({
           <div className="relative border border-gray-100 bg-gray-50/50 rounded-2xl overflow-hidden">
             <div className="overflow-x-auto custom-scrollbar">
               <div className="min-w-[1000px] p-6 pt-12 relative min-h-[400px]">
-                {/* Date Headers */}
                 <div className="absolute inset-0 pointer-events-none">
                   {dateHeaders.map((h, i) => (
                     <div
@@ -549,7 +643,6 @@ export default function StorytellerClient({
                   ))}
                 </div>
 
-                {/* Tasks Bars */}
                 <div className="space-y-4 relative z-10 mt-2">
                   {notionTasks.length > 0 ? (
                     notionTasks.map((task) => {
@@ -607,7 +700,6 @@ export default function StorytellerClient({
                   )}
                 </div>
 
-                {/* Today Marker */}
                 <div
                   className="absolute top-0 bottom-0 border-l-2 border-red-500/80 z-20 pointer-events-none"
                   style={{

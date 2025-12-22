@@ -114,7 +114,7 @@ async function fetchNotionTasksRaw() {
       return {
         id: page.id,
         title,
-        groupId,
+        groupId, // string | null
         dateStart,
         dateEnd,
         status: statusProp?.status?.name || statusProp?.select?.name || "Ready",
@@ -127,13 +127,12 @@ async function fetchNotionTasksRaw() {
       };
     });
 
-    // [Filter Active] "진행중" 상태만 필터링 (다시 활성화됨)
+    // [Filter Modified] GroupID가 있는 프로젝트만 필터링 (상태 무관)
+    // - 기존: "진행중" 상태만 필터링
+    // - 변경: GroupID가 존재하면 모두 반환 (타임라인, 트리맵 모두 적용됨)
     return tasks.filter(
       (t: any) =>
-        t.status === "진행중" ||
-        t.status === "In Progress" ||
-        t.status === "진행 중" ||
-        t.status === "Ongoing"
+        t.groupId !== null && t.groupId !== undefined && t.groupId !== ""
     );
   } catch (e) {
     console.error("Notion Fetch Error:", e);
@@ -186,20 +185,16 @@ function parseKoreanDate(text: string) {
 
 const getCachedNotion = unstable_cache(
   fetchNotionTasksRaw,
-  ["storyteller-notion-v8"],
+  ["storyteller-notion-v10"], // 캐시 키 업데이트
   { revalidate: 60 }
 );
 
 export default async function StorytellerPage() {
   const notionTasks = await getCachedNotion();
 
-  // 1. GroupID 추출
+  // 1. GroupID 추출 (이미 필터링되었지만 안전하게 한 번 더 체크)
   const uniqueGroupIds = Array.from(
-    new Set(
-      notionTasks
-        .map((t: any) => t.groupId)
-        .filter((id: any) => id !== null && id !== undefined && id !== "")
-    )
+    new Set(notionTasks.map((t: any) => t.groupId).filter((id: any) => id))
   ) as string[];
 
   // 기본값 (데이터가 없거나 ID가 없는 경우)
