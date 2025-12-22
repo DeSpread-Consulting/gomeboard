@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/storyteller",
-      "schedule": "00 8 * * *"
+      "schedule": "00 15 * * *"
     }
   ]
 }
