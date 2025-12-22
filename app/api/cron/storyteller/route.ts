@@ -121,8 +121,7 @@ export async function GET(request: Request) {
     allPages.forEach((page: any) => {
       const props = page.properties;
       // 노션 속성 타입별 GroupID 추출
-      const groupProp =
-        props["GroupID"] || props["Group ID"] || props["그룹ID"];
+      const groupProp = props["GroupID"] || props["GroupID"] || props["그룹ID"];
       let idValue: string | null = null;
 
       if (groupProp) {
