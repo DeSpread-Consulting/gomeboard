@@ -17,9 +17,9 @@ export const maxDuration = 60;
 const FILTER_QUERY = {
   filter: {
     or: [
-      { property: "Status", status: { equals: "진행중" } },
+      { property: "Status", status: { equals: "진행 중" } },
       { property: "Status", status: { equals: "In Progress" } },
-      { property: "상태", status: { equals: "진행중" } },
+      { property: "상태", status: { equals: "진행 중" } },
       { property: "상태", status: { equals: "In Progress" } },
     ],
   },
