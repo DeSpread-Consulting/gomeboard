@@ -1,13 +1,15 @@
+// app/components/Navbar.tsx
 "use client";
 
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { usePrivy } from "@privy-io/react-auth"; // [변경] NextAuth -> Privy
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  // [변경] session 대신 privy 훅 사용
+  const { user, authenticated, login, logout } = usePrivy();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const getNavLinkClass = (path: string) =>
@@ -23,6 +25,10 @@ export default function Navbar() {
     { name: "Metabase", path: "/metabase" },
     { name: "Storyteller", path: "/storyteller" },
   ];
+
+  // 표시할 이메일 (구글, 애플, 이메일 등에서 가져옴)
+  const displayEmail =
+    user?.email?.address || user?.google?.email || user?.apple?.email || "";
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-white/70 backdrop-blur-md border-b border-gray-200/50">
@@ -54,35 +60,24 @@ export default function Navbar() {
 
         {/* 우측 컨트롤 */}
         <div className="flex items-center gap-4">
-          {session?.user ? (
+          {/* [변경] session?.user 대신 authenticated 체크 */}
+          {authenticated ? (
             <div className="flex items-center gap-3">
-              {/* [수정] 이메일 다시 추가됨 */}
               <div className="text-right hidden sm:block">
-                <p className="text-xs font-bold text-gray-900">
-                  {session.user.name}
-                </p>
-                <p className="text-[10px] text-gray-500">
-                  {session.user.email}
-                </p>
+                <p className="text-xs font-bold text-gray-900">User</p>
+                <p className="text-[10px] text-gray-500">{displayEmail}</p>
               </div>
               <button
-                onClick={() => signOut()}
-                className="w-8 h-8 rounded-full overflow-hidden border border-gray-200"
+                onClick={logout} // [변경] signOut -> logout
+                className="w-8 h-8 rounded-full overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center text-xs font-bold"
               >
-                {session.user.image ? (
-                  <img
-                    src={session.user.image}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-blue-500" />
-                )}
+                {/* 이미지가 없으면 이니셜 표시 */}
+                {displayEmail.slice(0, 1).toUpperCase()}
               </button>
             </div>
           ) : (
             <button
-              onClick={() => signIn("google")}
+              onClick={login} // [변경] signIn -> login
               className="bg-black text-white px-4 py-2 rounded-lg text-xs font-bold"
             >
               Sign In

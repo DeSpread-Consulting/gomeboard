@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signIn, signOut } from "next-auth/react"; // [NEW] import 추가
+import { usePrivy } from "@privy-io/react-auth"; // [변경] NextAuth -> Privy
 
 export interface ReportTableRow {
   id: string;
@@ -12,8 +11,8 @@ export interface ReportTableRow {
   managerImg: string | null;
   team: string;
   targetMonth: string;
-  status: string; // Approved, Pending, Missing, N/A, Error
-  details: string; // "3/5"
+  status: string;
+  details: string;
 }
 
 export default function ReportClient({
@@ -24,17 +23,13 @@ export default function ReportClient({
   rows: ReportTableRow[];
 }) {
   const pathname = usePathname();
-  const { data: session } = useSession(); // [NEW] 세션 데이터 가져오기
-  const getNavLinkClass = (path: string) =>
-    pathname === path
-      ? "text-black font-bold"
-      : "text-gray-500 hover:text-black";
+  // [변경] useSession() 제거하고 usePrivy() 사용
+  const { user, authenticated } = usePrivy();
 
   return (
     <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] font-sans">
-      {/* [Layout Fix] max-w-[1600px], py-10 */}
       <main className="max-w-[1600px] mx-auto px-6 py-10">
-        {/* [Layout Fix] mb-8 */}
+        {/* ... (이하 기존 JSX 코드 그대로 유지) ... */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight mb-2 text-gray-900">
             Monthly Reports Status
