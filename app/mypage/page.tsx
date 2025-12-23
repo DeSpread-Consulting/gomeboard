@@ -1,10 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // app/mypage/page.tsx
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import Image from "next/image";
 import Link from "next/link";
 
 export default function MyPage() {
@@ -27,6 +25,81 @@ export default function MyPage() {
     linkEmail,
     unlinkEmail,
   } = usePrivy();
+
+  // [State] 채널 검증 및 관리 상태
+  const [channelInput, setChannelInput] = useState("");
+  const [myChannel, setMyChannel] = useState<{
+    handle: string;
+    url: string;
+    role?: string;
+  } | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // [Effect] 로컬 스토리지에서 저장된 채널 정보 불러오기
+  useEffect(() => {
+    const saved = localStorage.getItem("my_telegram_channel");
+    if (saved) {
+      setMyChannel(JSON.parse(saved));
+    }
+  }, []);
+
+  // [Handler] 채널 소유권 검증 요청
+  const handleVerifyChannel = async () => {
+    if (!channelInput || !user?.telegram?.telegramUserId) return;
+
+    setIsVerifying(true);
+
+    try {
+      const response = await fetch("/api/verify-channel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: channelInput,
+          userId: user.telegram.telegramUserId, // Privy가 제공하는 유저의 텔레그램 숫자 ID
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 성공 시 데이터 정제 및 저장
+        const handle = channelInput
+          .replace("@", "")
+          .replace("t.me/", "")
+          .replace("https://", "");
+
+        const channelData = {
+          handle: handle,
+          url: `https://t.me/${handle}`,
+          role: data.role, // 'creator' 또는 'administrator'
+        };
+
+        setMyChannel(channelData);
+        localStorage.setItem(
+          "my_telegram_channel",
+          JSON.stringify(channelData)
+        );
+        setChannelInput("");
+        alert("✅ 채널 소유권이 확인되었습니다!");
+      } else {
+        // 실패 시 에러 메시지
+        alert(`❌ 검증 실패: ${data.message || "알 수 없는 오류"}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("서버 통신 중 오류가 발생했습니다.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // [Handler] 채널 삭제
+  const handleDeleteChannel = () => {
+    if (confirm("등록된 채널 정보를 삭제하시겠습니까?")) {
+      setMyChannel(null);
+      localStorage.removeItem("my_telegram_channel");
+    }
+  };
 
   if (!ready || !authenticated || !user) {
     return null; // 또는 로딩 스피너
@@ -72,7 +145,7 @@ export default function MyPage() {
                 프로필 사진과 닉네임도 텔레그램 정보를 사용합니다.
               </p>
 
-              {/* [수정] onLink -> onClick 으로 변경 */}
+              {/* [수정] onLink -> onClick 으로 변경하여 HTML 표준 준수 */}
               <button
                 onClick={() => linkTelegram()}
                 className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md active:scale-95"
@@ -99,31 +172,119 @@ export default function MyPage() {
                 </div>
               )}
             </div>
-            <div className="absolute bottom-0 right-0 bg-blue-600 text-white p-1.5 rounded-full border-2 border-white shadow-sm">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            {/* 텔레그램 인증 뱃지 */}
+            {isTelegramLinked && (
+              <div
+                className="absolute bottom-0 right-0 bg-[#2AABEE] text-white p-1.5 rounded-full border-2 border-white shadow-sm"
+                title="Telegram Verified"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                ></path>
-              </svg>
-            </div>
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 11.944 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+                </svg>
+              </div>
+            )}
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-1">
             {displayName}
           </h2>
           <p className="text-gray-400 text-sm font-medium">
-            {user.telegram ? "Telegram Verified" : "Guest User"}
+            {user.telegram ? "Verified User" : "Guest User"}
           </p>
         </div>
 
-        {/* 3. 계정 연동 리스트 */}
+        {/* 3. [NEW] 내 채널 검증 및 설정 섹션 */}
+        {isTelegramLinked && (
+          <div className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-gray-100 mb-8 animate-in fade-in slide-in-from-bottom-4">
+            <div className="px-8 py-6 border-b border-gray-50 bg-[#F4F9FD]">
+              <h3 className="font-bold text-[#2AABEE] flex items-center gap-2">
+                📢 My Channel Verification
+              </h3>
+            </div>
+            <div className="p-8">
+              {!myChannel ? (
+                <div className="flex flex-col gap-4">
+                  {/* 안내 문구 */}
+                  <div className="bg-blue-50 text-blue-800 text-xs p-4 rounded-xl leading-relaxed">
+                    <strong>[인증 방법]</strong>
+                    <br />
+                    1. 텔레그램에서 <strong>@BGT_gomebot</strong>을 본인 채널의{" "}
+                    <strong>관리자(Admin)</strong>로 추가해주세요.
+                    <br />
+                    2. 아래에 채널 ID를 입력하고 &apos;소유권 확인&apos; 버튼을
+                    눌러주세요.
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="text"
+                      placeholder="@channel_id 입력"
+                      value={channelInput}
+                      onChange={(e) => setChannelInput(e.target.value)}
+                      className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2AABEE]/20 focus:border-[#2AABEE] transition-all"
+                    />
+                    <button
+                      onClick={handleVerifyChannel}
+                      disabled={!channelInput || isVerifying}
+                      className="bg-[#2AABEE] hover:bg-[#229ED9] disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold px-6 py-3 rounded-xl text-sm transition-all flex items-center gap-2 whitespace-nowrap justify-center"
+                    >
+                      {isVerifying ? "확인 중..." : "소유권 확인"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // 인증 완료된 상태 카드
+                <div className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm group hover:border-[#2AABEE]/30 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#2AABEE] to-[#229ED9] flex items-center justify-center text-white text-xl font-bold">
+                      {myChannel.handle.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                        @{myChannel.handle}
+                        <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded border border-green-200">
+                          {myChannel.role === "creator" ? "OWNER" : "ADMIN"}
+                        </span>
+                      </h4>
+                      <a
+                        href={myChannel.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-gray-500 hover:text-[#2AABEE] hover:underline"
+                      >
+                        {myChannel.url}
+                      </a>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleDeleteChannel}
+                    className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                    title="삭제"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 4. 계정 연동 리스트 */}
         <div className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-gray-100">
           <div className="px-8 py-6 border-b border-gray-50 bg-gray-50/50">
             <h3 className="font-bold text-gray-900">Linked Accounts</h3>
@@ -139,7 +300,7 @@ export default function MyPage() {
                   ? `@${user.telegram.username}`
                   : user.telegram?.telegramUserId
               }
-              onLink={linkTelegram}
+              onLink={() => linkTelegram()} // [수정] 화살표 함수로 감싸기
               onUnlink={() => unlinkTelegram(user.telegram!.telegramUserId)}
               isPrimary={true}
             />
@@ -150,7 +311,7 @@ export default function MyPage() {
               name="Google"
               isConnected={!!user.google}
               identifier={user.google?.email}
-              onLink={linkGoogle}
+              onLink={() => linkGoogle()} // [수정] 화살표 함수로 감싸기
               onUnlink={() => unlinkGoogle(user.google!.subject)}
             />
 
@@ -160,7 +321,7 @@ export default function MyPage() {
               name="Apple"
               isConnected={!!user.apple}
               identifier={user.apple?.email}
-              onLink={linkApple}
+              onLink={() => linkApple()}
               onUnlink={() => unlinkApple(user.apple!.subject)}
             />
 
@@ -172,7 +333,7 @@ export default function MyPage() {
               identifier={
                 user.twitter?.username ? `@${user.twitter.username}` : undefined
               }
-              onLink={linkTwitter}
+              onLink={() => linkTwitter()}
               onUnlink={() => unlinkTwitter(user.twitter!.subject)}
             />
 
@@ -182,7 +343,7 @@ export default function MyPage() {
               name="Discord"
               isConnected={!!user.discord}
               identifier={user.discord?.username}
-              onLink={linkDiscord}
+              onLink={() => linkDiscord()}
               onUnlink={() => unlinkDiscord(user.discord!.subject)}
             />
 
@@ -192,7 +353,7 @@ export default function MyPage() {
               name="Email"
               isConnected={!!user.email}
               identifier={user.email?.address}
-              onLink={linkEmail}
+              onLink={() => linkEmail()}
               onUnlink={() => unlinkEmail(user.email!.address)}
             />
 
@@ -209,7 +370,7 @@ export default function MyPage() {
                     )}...${user.wallet.address.slice(-4)}`
                   : undefined
               }
-              onLink={linkWallet}
+              onLink={() => linkWallet()}
               onUnlink={() => unlinkWallet(user.wallet!.address)}
             />
           </div>
@@ -228,7 +389,17 @@ export default function MyPage() {
   );
 }
 
-// 재사용 가능한 계정 행 컴포넌트
+// 5. AccountRow 컴포넌트 (타입 정의 수정 및 onClick 적용)
+interface AccountRowProps {
+  icon: React.ReactNode | string;
+  name: string;
+  isConnected: boolean;
+  identifier?: string | null;
+  onLink: () => void; // 인자 없는 함수 타입
+  onUnlink: () => void;
+  isPrimary?: boolean;
+}
+
 function AccountRow({
   icon,
   name,
@@ -237,7 +408,7 @@ function AccountRow({
   onLink,
   onUnlink,
   isPrimary = false,
-}: any) {
+}: AccountRowProps) {
   return (
     <div className="flex items-center justify-between p-6 hover:bg-gray-50/50 transition-colors">
       <div className="flex items-center gap-4">
@@ -249,7 +420,6 @@ function AccountRow({
           }`}
         >
           {icon === "G" ? (
-            // 구글 로고 SVG 예시
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
                 fill="currentColor"
@@ -276,6 +446,7 @@ function AccountRow({
       </div>
 
       <button
+        // [중요] 여기를 onLink={...} 가 아니라 onClick={...} 으로 수정했습니다.
         onClick={isConnected ? onUnlink : onLink}
         className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
           isConnected
