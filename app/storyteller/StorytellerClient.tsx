@@ -622,6 +622,8 @@ export default function StorytellerClient({
                   <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[10px]">
                     <th className="py-2 pl-2 w-10 text-center">#</th>
                     <th className="py-2">Channel</th>
+                    {/* [변경] Share 컬럼 추가 */}
+                    <th className="py-2 text-right w-16">Share</th>
                     <th className="py-2 text-right pr-4">Score</th>
                     <th className="py-2 text-center w-12">Link</th>
                   </tr>
@@ -632,6 +634,12 @@ export default function StorytellerClient({
                     const telegramLink = ch.channelUsername
                       ? `https://t.me/${ch.channelUsername}`
                       : `https://t.me/${ch.channelId}`;
+
+                    // [변경] 점유율 계산 (소수점 2자리)
+                    const share =
+                      totalScore > 0
+                        ? ((ch.score / totalScore) * 100).toFixed(2)
+                        : "0.00";
 
                     return (
                       <tr
@@ -663,13 +671,16 @@ export default function StorytellerClient({
                             </div>
                           </div>
                         </td>
+                        {/* [변경] Share 데이터 표시 */}
+                        <td className="py-2 text-right text-xs font-medium text-gray-500 tabular-nums">
+                          {share}%
+                        </td>
                         <td className="py-2 text-right pr-4">
                           <span className="text-gray-900 font-bold font-mono text-xs group-hover:text-[#0037F0]">
                             {Math.round(ch.score).toLocaleString()}
                           </span>
                         </td>
                         <td className="py-2 text-center">
-                          {/* [수정] 텔레그램 아이콘 정렬: inline-flex, justify-center 추가 */}
                           <a
                             href={telegramLink}
                             target="_blank"
