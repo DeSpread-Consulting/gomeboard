@@ -40,6 +40,7 @@ export default function Navbar() {
         },
       ],
     },
+    { name: "KOL", path: "/kol", allowed: ["internal"] },
   ];
 
   const visibleLinks = navLinks.filter((link) => link.allowed.includes(role));
