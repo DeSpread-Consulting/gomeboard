@@ -39,19 +39,22 @@ export default function KOLClient({
   // 1. 그래프 옵션
   const chartOption = useMemo(() => {
     const validNodes = initialNodes.filter(
-      (n) => n.calculated_tier !== "Tier D" && n.total_cited > 0
+      (n) => n.calculated_tier !== "Tier D" && n.total_cited > 0,
     );
     const validNodeIds = new Set(validNodes.map((n) => n.channel_id));
     const validEdges = initialEdges.filter(
-      (e) => validNodeIds.has(e.source_id) && validNodeIds.has(e.target_id)
+      (e) => validNodeIds.has(e.source_id) && validNodeIds.has(e.target_id),
     );
 
     const topGroups = validNodes
       .filter((n) => n.main_group)
-      .reduce((acc, curr) => {
-        acc[curr.main_group!] = (acc[curr.main_group!] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      .reduce(
+        (acc, curr) => {
+          acc[curr.main_group!] = (acc[curr.main_group!] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
 
     const sortedGroupNames = Object.keys(topGroups)
       .sort((a, b) => topGroups[b] - topGroups[a])
@@ -73,7 +76,7 @@ export default function KOLClient({
         node.profile_image_url && node.profile_image_url.length > 5
           ? node.profile_image_url
           : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-              node.title
+              node.title,
             )}&background=random&color=fff&size=128`;
 
       let borderColor = "#fff";
@@ -92,8 +95,8 @@ export default function KOLClient({
           ? tier === "Tier A+"
             ? 65
             : tier === "Tier A"
-            ? 60
-            : 55
+              ? 60
+              : 55
           : Math.max(15, Math.min(node.total_cited * 1.5, 45)),
         category: categoryName,
         draggable: false,
@@ -112,8 +115,8 @@ export default function KOLClient({
             tier === "Tier A+"
               ? "{a|👑👑} {b}"
               : tier === "Tier A"
-              ? "{a|👑} {b}"
-              : "{b}",
+                ? "{a|👑} {b}"
+                : "{b}",
           rich: { a: { fontSize: 14 } },
           color: "#333",
           fontSize: 11,
@@ -132,8 +135,8 @@ export default function KOLClient({
                         }</b> <span style="color:${borderColor}">[${tier}]</span><br/>
                         Group: ${node.main_group || "-"}<br/>
                         Cited: ${node.total_cited} (A+: ${
-            node.cited_by_ap_count
-          }, A: ${node.cited_by_a_count})<br/>
+                          node.cited_by_ap_count
+                        }, A: ${node.cited_by_a_count})<br/>
                         Score: ${node.noble_score}
                     </div>
                 </div>
@@ -202,7 +205,7 @@ export default function KOLClient({
 
   const paginatedList = filteredList.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const totalPages = Math.ceil(filteredList.length / itemsPerPage);
@@ -283,14 +286,14 @@ export default function KOLClient({
                         node.calculated_tier === "Tier A+"
                           ? "bg-red-100 text-red-700"
                           : node.calculated_tier === "Tier A"
-                          ? "bg-orange-100 text-orange-700"
-                          : node.calculated_tier === "Tier B+"
-                          ? "bg-amber-100 text-amber-700"
-                          : node.calculated_tier === "Tier B"
-                          ? "bg-purple-100 text-purple-700"
-                          : node.calculated_tier === "Tier C"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-gray-100 text-gray-600"
+                            ? "bg-orange-100 text-orange-700"
+                            : node.calculated_tier === "Tier B+"
+                              ? "bg-amber-100 text-amber-700"
+                              : node.calculated_tier === "Tier B"
+                                ? "bg-purple-100 text-purple-700"
+                                : node.calculated_tier === "Tier C"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-gray-100 text-gray-600"
                       }`}
                     >
                       {node.calculated_tier}
@@ -354,7 +357,7 @@ export default function KOLClient({
               disabled={currentPage === 1}
               className="px-3 py-1 border rounded disabled:opacity-30 hover:bg-gray-50"
             >
-              &lt; 이전
+              &lt; Prev
             </button>
             <span className="text-sm text-gray-600 mx-2">
               Page <b>{currentPage}</b> of {totalPages}
