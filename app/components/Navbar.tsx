@@ -41,6 +41,7 @@ export default function Navbar() {
       ],
     },
     { name: "KOL", path: "/kol", allowed: ["internal"] },
+    { name: "Settle", path: "/settlement", allowed: ["internal"] },
   ];
 
   const visibleLinks = navLinks.filter((link) => link.allowed.includes(role));
