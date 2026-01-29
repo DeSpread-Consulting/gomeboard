@@ -31,7 +31,7 @@ export default function AuthWrapper({
 
   // 1. 로딩 중 (흰 화면)
   if (!ready) {
-    return <div className="min-h-screen bg-white" />;
+    return <div className="min-h-screen bg-[#F3F4F6]" />;
   }
 
   // 2. 비로그인 상태 -> 로그인 가드 노출
@@ -41,15 +41,12 @@ export default function AuthWrapper({
 
   // [수정 2] 외부 사용자가 잘못된 페이지에 있을 때, 리다이렉트가 일어나기 전까지 잠시 빈 화면 노출
   if (role === "external" && !pathname.startsWith("/storyteller")) {
-    return <div className="min-h-screen bg-white" />;
+    return <div className="min-h-screen bg-[#F3F4F6]" />;
   }
 
   // 3. 정상 접근 허용
   return (
-    // [핵심 레이아웃 구조]
-    // min-h-screen: 화면 전체 높이 확보
-    // flex-col: 수직 정렬
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-[#F3F4F6]">
       {/* 네비게이션바 (고정) */}
       <div className="flex-none z-50 sticky top-0">
         <Navbar />
@@ -59,7 +56,7 @@ export default function AuthWrapper({
          컨텐츠가 짧아도 이 영역이 늘어나서 푸터를 바닥으로 밀어버립니다.
          w-full: 가로 꽉 채움
       */}
-      <main className="flex-1 flex flex-col w-full relative">{children}</main>
+      <main className="flex-1 flex flex-col w-full relative bg-mesh">{children}</main>
 
       {/* 푸터 (고정) */}
       <div className="flex-none">

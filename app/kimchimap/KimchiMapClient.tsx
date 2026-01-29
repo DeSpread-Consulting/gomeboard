@@ -89,7 +89,7 @@ const CustomTreemapContent = (props: any) => {
       style={{ overflow: "visible" }}
     >
       <div
-        className="w-full h-full rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group relative overflow-hidden flex flex-col justify-between p-3"
+        className="w-full h-full rounded-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group relative overflow-hidden flex flex-col justify-between p-3"
         style={{
           background: `linear-gradient(135deg, rgba(255,255,255,0.4) 0%, ${tintColor} 100%)`,
           backdropFilter: "blur(12px)",
@@ -186,7 +186,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const item = payload[0].payload.itemData as MindshareItem;
     return (
-      <div className="bg-white/95 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/50 p-4 rounded-2xl text-sm z-50 min-w-[200px]">
+      <div className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 p-4 rounded-lg text-sm z-50 min-w-[200px]">
         <div className="flex items-center gap-3 mb-3">
           <img
             src={item.logo}
@@ -305,16 +305,13 @@ export default function KimchiMapClient() {
   }, [data, viewLimit]);
 
   return (
-    <div className="flex-1 w-full bg-[#F5F5F7] text-[#1D1D1F] font-sans min-h-screen">
+    <div className="flex-1 w-full bg-[#F3F4F6] text-[#1D1D1F] font-sans min-h-screen">
       {/* [수정] max-w-7xl로 변경하여 다른 페이지와 여백 통일 */}
-      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-10">
         {/* Header - [수정] mb-8 -> mb-12로 간격 확장 */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
-            <h1
-              className="text-[#0037F0] text-4xl font-black uppercase tracking-tighter mb-2"
-              style={{ fontFamily: "'General Sans', sans-serif" }}
-            >
+            <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-1">
               Kimchi Map
             </h1>
             <p className="text-gray-500 text-sm font-medium">
@@ -328,7 +325,7 @@ export default function KimchiMapClient() {
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 View
               </span>
-              <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm items-center h-9">
+              <div className="flex bg-white rounded-xl p-1 border border-gray-200 shadow-glass items-center h-9">
                 <button
                   onClick={() => setViewLimit(20)}
                   className={`px-3 h-full flex items-center rounded-md text-xs font-bold transition-all ${
@@ -358,7 +355,7 @@ export default function KimchiMapClient() {
                 Filter
               </span>
               <div
-                className="flex items-center gap-2 bg-white px-3 h-9 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 bg-white px-3 h-9 rounded-xl border border-gray-200 shadow-glass cursor-pointer hover:bg-gray-50 transition-colors"
                 onClick={() => setPreTge(!preTge)}
               >
                 <span className="text-[10px] font-bold text-gray-500 uppercase select-none">
@@ -383,7 +380,7 @@ export default function KimchiMapClient() {
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 Period
               </span>
-              <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm h-9 items-center">
+              <div className="flex bg-white rounded-xl p-1 border border-gray-200 shadow-glass h-9 items-center">
                 {[1, 7, 14, 30, 90].map((d) => (
                   <button
                     key={d}
@@ -403,9 +400,9 @@ export default function KimchiMapClient() {
         </div>
 
         {/* 1. TreeMap Container */}
-        <div className="relative h-[700px] w-full bg-white/50 rounded-3xl border border-white shadow-sm overflow-hidden p-4 mb-12">
+        <div className="relative h-[700px] w-full bg-white rounded-xl border border-white shadow-sm overflow-hidden p-4 mb-12">
           {loading && (
-            <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-sm flex items-center justify-center">
+            <div className="absolute inset-0 z-10 bg-gray-50  flex items-center justify-center">
               <div className="text-[#0037F0] font-bold animate-pulse">
                 Updating Mindshare...
               </div>
@@ -436,7 +433,7 @@ export default function KimchiMapClient() {
         </div>
 
         {/* 2. Leaderboard Section */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 shadow-sm">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 md:p-8 shadow-glass">
           <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
             🏆 Leaderboard
             <span className="text-xs font-normal text-gray-400 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
@@ -466,7 +463,7 @@ export default function KimchiMapClient() {
                   return (
                     <tr
                       key={ch.ticker}
-                      className="hover:bg-blue-50/30 transition-colors group"
+                      className="hover:bg-gray-50 transition-colors group"
                     >
                       <td className="py-3 pl-2 text-center font-bold text-gray-400 group-hover:text-[#0037F0]">
                         {idx + 1}

@@ -108,7 +108,7 @@ const CustomTreemapContent = (props: any) => {
       style={{ overflow: "visible" }}
     >
       <div
-        className="w-full h-full rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group relative overflow-hidden flex flex-col justify-between p-3"
+        className="w-full h-full rounded-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group relative overflow-hidden flex flex-col justify-between p-3"
         style={{
           background: `linear-gradient(135deg, rgba(255,255,255,0.4) 0%, ${tintColor} 100%)`,
           backdropFilter: "blur(12px)",
@@ -141,7 +141,7 @@ const CustomTreemapContent = (props: any) => {
                   } rounded-full object-cover shadow-sm ring-2 ring-white/60 transition-all`}
                 />
                 <div
-                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white/50 ${
+                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-200 ${
                     isGrowing ? "bg-emerald-400" : "bg-rose-400"
                   }`}
                 />
@@ -221,7 +221,7 @@ const CustomTooltip = ({ active, payload }: any) => {
     const item = payload[0].payload.itemData;
     if (!item) return null;
     return (
-      <div className="bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/50 p-4 rounded-2xl text-sm z-50 min-w-[200px]">
+      <div className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 p-4 rounded-lg text-sm z-50 min-w-[200px]">
         <div className="flex items-center gap-3 mb-4">
           {item.profileImageUrl && (
             <img
@@ -239,7 +239,7 @@ const CustomTooltip = ({ active, payload }: any) => {
             </p>
           </div>
         </div>
-        <div className="space-y-2 bg-white/50 rounded-xl p-3 border border-white/60">
+        <div className="space-y-2 bg-white rounded-xl p-3 border border-gray-200">
           <div className="flex justify-between items-center gap-4">
             <span className="text-gray-500 text-xs font-medium">
               Total Score
@@ -454,19 +454,16 @@ export default function StorytellerClient({
   };
 
   return (
-    <div className="flex-1 w-full bg-[#F5F5F7] text-[#1D1D1F] font-sans">
-      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
+    <div className="flex-1 w-full bg-[#F3F4F6] text-[#1D1D1F] font-sans">
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-10">
         {/* 헤더 섹션 */}
         <div className="flex flex-col gap-8 mb-12">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
-              <h1
-                className="text-[#0037F0] text-4xl font-black uppercase tracking-tighter mb-2 leading-[0.9]"
-                style={{ fontFamily: "'General Sans', sans-serif" }}
-              >
+              <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-1">
                 Storyteller
               </h1>
-              <p className="text-gray-500 text-sm font-medium ml-1">
+              <p className="text-gray-500 text-sm font-medium">
                 Influence Intelligence & Content Scheduling
               </p>
             </div>
@@ -477,7 +474,7 @@ export default function StorytellerClient({
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   Period
                 </span>
-                <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm h-9 items-center">
+                <div className="flex bg-white rounded-xl p-1 border border-gray-200 shadow-glass h-9 items-center">
                   {[7, 14, 30, 90].map((days) => (
                     <button
                       key={days}
@@ -504,7 +501,7 @@ export default function StorytellerClient({
                   value={selectedDate}
                   max={todayStr}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold text-gray-700 outline-none focus:border-[#0037F0] shadow-sm h-9"
+                  className="bg-white border border-gray-200 rounded-xl px-3 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-[#0037F0]/30 shadow-glass h-9"
                 />
               </div>
             </div>
@@ -562,7 +559,7 @@ export default function StorytellerClient({
         </div>
 
         {/* 1. TreeMap */}
-        <div className="relative h-[650px] w-full mb-10 rounded-3xl overflow-hidden shadow-inner border border-white/50 bg-white/30">
+        <div className="relative h-[650px] w-full mb-10 rounded-xl overflow-hidden shadow-inner border border-gray-200 bg-gray-50">
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.1] z-0">
             <img
               src="/logo.png"
@@ -572,7 +569,7 @@ export default function StorytellerClient({
           </div>
 
           {isLoadingHistory && (
-            <div className="absolute inset-0 z-50 bg-white/40 backdrop-blur-md flex items-center justify-center">
+            <div className="absolute inset-0 z-50 bg-gray-100 backdrop-blur-md flex items-center justify-center">
               <div className="text-[#0037F0] font-bold animate-pulse">
                 Loading...
               </div>
@@ -606,7 +603,7 @@ export default function StorytellerClient({
         {/* 2. Leaderboard & Schedule */}
         <div className="flex flex-col gap-10">
           {/* Leaderboard */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-8 shadow-sm">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 md:p-8 shadow-glass">
             <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4 md:mb-6 flex items-center gap-2">
               🏆 Leaderboard{" "}
               <span className="text-xs font-normal text-gray-400 bg-gray-50 px-2 py-0.5 rounded">
@@ -643,7 +640,7 @@ export default function StorytellerClient({
                     return (
                       <tr
                         key={ch.channelId}
-                        className="hover:bg-blue-50/30 transition-colors group"
+                        className="hover:bg-gray-50 transition-colors group"
                       >
                         <td className="py-2 pl-1 text-center font-bold text-gray-400 group-hover:text-[#0037F0] text-xs md:pl-2">
                           {idx + 1}
@@ -704,7 +701,7 @@ export default function StorytellerClient({
           </div>
 
           {/* Schedule */}
-          <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm flex flex-col">
+          <div className="bg-white rounded-lg border border-gray-200 p-8 shadow-glass flex flex-col">
             <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-2">
               🗓 Content Schedule{" "}
               <span className="text-xs font-normal text-gray-400 bg-gray-50 px-2 py-0.5 rounded">

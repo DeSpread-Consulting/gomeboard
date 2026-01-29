@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gemini --version:*)",
+      "Bash(gemini:*)",
+      "mcp__stitch__create_project",
+      "mcp__stitch__generate_screen_from_text",
+      "WebFetch(domain:contribution.usercontent.google.com)",
+      "mcp__stitch__get_screen",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

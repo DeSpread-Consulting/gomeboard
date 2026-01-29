@@ -2,6 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
+import {
+  ChartBarIcon,
+  RocketLaunchIcon,
+  Cog6ToothIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClipboardDocumentIcon,
+  PencilSquareIcon,
+  PlusCircleIcon,
+} from "@heroicons/react/24/outline";
 
 const supabase = createClient();
 
@@ -433,25 +443,25 @@ export default function SettlementPage() {
   );
 
   return (
-    <div className="bg-gray-50 min-h-screen pb-20 relative">
+    <div className="bg-[#F3F4F6] min-h-screen pb-20 relative">
       <div className="max-w-7xl mx-auto p-8 space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-gray-200 pb-6">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+            <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-1">
               KOL Settlement
             </h1>
-            <p className="text-gray-500 mt-1">
+            <p className="text-gray-500 text-sm font-medium">
               텔레그램 KOL 월별 정산 대시보드
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center bg-white rounded-lg border shadow-sm px-2 py-1">
+            <div className="flex items-center bg-white rounded-xl border border-gray-200 shadow-glass px-2 py-1">
               <button
                 onClick={() => moveMonth(-1)}
                 className="p-2 hover:bg-gray-100 rounded text-gray-500"
               >
-                ◀
+                <ChevronLeftIcon className="w-5 h-5" />
               </button>
               <span className="px-4 font-bold text-gray-800 min-w-[100px] text-center">
                 {formatMonth(selectedDate)}
@@ -460,10 +470,10 @@ export default function SettlementPage() {
                 onClick={() => moveMonth(1)}
                 className="p-2 hover:bg-gray-100 rounded text-gray-500"
               >
-                ▶
+                <ChevronRightIcon className="w-5 h-5" />
               </button>
             </div>
-            <div className="bg-white px-6 py-3 rounded-xl shadow-sm border border-blue-100 text-right min-w-[200px]">
+            <div className="bg-white px-6 py-3 rounded-lg border border-gray-200 shadow-glass text-right min-w-[200px]">
               <p className="text-xs text-blue-500 uppercase font-semibold tracking-wider mb-1">
                 Total Payout
               </p>
@@ -475,21 +485,22 @@ export default function SettlementPage() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white p-1.5 rounded-lg border inline-flex shadow-sm">
+        <div className="bg-white p-1.5 rounded-xl border border-gray-200 inline-flex shadow-glass">
           {[
-            { id: "dashboard", label: "📊 정산 요약", icon: "" },
-            { id: "submit", label: "🚀 링크 등록", icon: "" },
-            { id: "channels", label: "⚙️ 채널 관리", icon: "" },
+            { id: "dashboard", label: "정산 요약", Icon: ChartBarIcon },
+            { id: "submit", label: "링크 등록", Icon: RocketLaunchIcon },
+            { id: "channels", label: "채널 관리", Icon: Cog6ToothIcon },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`px-5 py-2.5 text-sm font-bold rounded-md transition-all duration-200 ${
+              className={`px-5 py-2.5 text-sm font-bold rounded-md transition-all duration-200 flex items-center gap-1.5 ${
                 activeTab === tab.id
-                  ? "bg-gray-900 text-white shadow-md"
+                  ? "bg-[#0037F0] text-white shadow-brand-glow"
                   : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
               }`}
             >
+              <tab.Icon className="w-4 h-4 inline" />
               {tab.label}
             </button>
           ))}
@@ -498,9 +509,9 @@ export default function SettlementPage() {
         <div className="transition-all duration-300">
           {/* TAB 1: 정산 요약 */}
           {activeTab === "dashboard" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-glass overflow-hidden">
               <table className="w-full text-sm text-left">
-                <thead className="bg-blue-600 text-white">
+                <thead className="bg-gray-50 text-gray-600 font-bold uppercase text-xs">
                   <tr>
                     <th className="px-6 py-4">Tier</th>
                     <th className="px-6 py-4">Channel</th>
@@ -544,7 +555,9 @@ export default function SettlementPage() {
                             {item.wallet_address
                               ? `${item.wallet_address.substring(0, 8)}...${item.wallet_address.substring(item.wallet_address.length - 6)}`
                               : "(미등록)"}
-                            {item.wallet_address && <span>📋</span>}
+                            {item.wallet_address && (
+                              <ClipboardDocumentIcon className="w-3 h-3" />
+                            )}
                           </button>
                         </td>
                         <td className="px-6 py-4 text-center font-medium text-gray-700">
@@ -583,7 +596,7 @@ export default function SettlementPage() {
                           >
                             <div className="bg-white rounded border border-gray-200 p-4">
                               <h4 className="font-bold text-sm mb-3 text-gray-700">
-                                📜 {item.channel_name} -{" "}
+                                {item.channel_name} -{" "}
                                 {formatMonth(selectedDate)} 상세 내역
                               </h4>
                               <div className="space-y-2">
@@ -657,10 +670,11 @@ export default function SettlementPage() {
           {/* TAB 2: 링크 등록 */}
           {activeTab === "submit" && (
             <div className="max-w-3xl mx-auto">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-gray-900 px-6 py-4">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-glass overflow-hidden">
+                <div className="bg-[#0037F0] px-6 py-4">
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    📝 작업 등록 (Bulk Upload)
+                    <PencilSquareIcon className="w-5 h-5 inline" />
+                    작업 등록 (Bulk Upload)
                   </h2>
                 </div>
                 <div className="p-8 space-y-6">
@@ -671,7 +685,7 @@ export default function SettlementPage() {
                     </label>
                     <input
                       type="date"
-                      className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-3 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                       value={submitDate}
                       onChange={(e) => setSubmitDate(e.target.value)}
                     />
@@ -721,14 +735,14 @@ export default function SettlementPage() {
                       value={inputLinks}
                       onChange={(e) => setInputLinks(e.target.value)}
                       placeholder={`t.me/channelA/101\nt.me/channelB/202`}
-                      className="w-full h-48 p-4 border rounded-xl outline-none resize-none font-mono text-sm leading-relaxed"
+                      className="w-full h-48 p-4 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none resize-none font-mono text-sm leading-relaxed border"
                     />
                   </div>
 
                   <button
                     onClick={handleBulkSubmit}
                     disabled={loading}
-                    className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all"
+                    className="w-full py-4 bg-[#0037F0] text-white font-bold rounded-lg shadow-brand-glow hover:bg-blue-700 transition-all"
                   >
                     {loading
                       ? "처리 중..."
@@ -742,9 +756,9 @@ export default function SettlementPage() {
           {/* TAB 3: 채널 관리 */}
           {activeTab === "channels" && (
             <div className="space-y-8">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-glass overflow-hidden">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-800 text-white">
+                  <thead className="bg-gray-50 text-gray-600 font-bold uppercase text-xs">
                     <tr>
                       <th className="px-6 py-4">Tier</th>
                       <th className="px-6 py-4">Channel Info</th>
@@ -780,7 +794,7 @@ export default function SettlementPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="bg-white/50 px-2 py-1 rounded border border-gray-200 text-xs">
+                            <span className="bg-white px-2 py-1 rounded border border-gray-200 text-xs">
                               👥 {ch.subscriber}
                             </span>
                           </td>
@@ -813,8 +827,11 @@ export default function SettlementPage() {
               </div>
 
               {/* 채널 추가 폼 */}
-              <div className="bg-white p-6 rounded-xl border border-gray-200">
-                <h3 className="font-bold mb-4">🆕 신규 채널 등록</h3>
+              <div className="glass-card p-6">
+                <h3 className="font-bold mb-4 flex items-center gap-2">
+                  <PlusCircleIcon className="w-5 h-5 inline" />
+                  신규 채널 등록
+                </h3>
                 <div className="grid grid-cols-6 gap-3 text-sm items-end">
                   {/* items-end: 라벨이 추가되어 높이가 달라져도 입력창 라인을 맞춤 */}
                   <div>
@@ -822,7 +839,7 @@ export default function SettlementPage() {
                       Tier
                     </label>
                     <input
-                      className="w-full p-2 border rounded"
+                      className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                       placeholder="A+"
                       value={newChannel.tier}
                       onChange={(e) =>
@@ -835,7 +852,7 @@ export default function SettlementPage() {
                       채널명
                     </label>
                     <input
-                      className="w-full p-2 border rounded"
+                      className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                       placeholder="채널 이름"
                       value={newChannel.channel_name}
                       onChange={(e) =>
@@ -851,7 +868,7 @@ export default function SettlementPage() {
                       링크
                     </label>
                     <input
-                      className="w-full p-2 border rounded"
+                      className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                       placeholder="https://t.me/..."
                       value={newChannel.channel_link}
                       onChange={(e) =>
@@ -868,7 +885,7 @@ export default function SettlementPage() {
                       작성 단가 ($)
                     </label>
                     <input
-                      className="w-full p-2 border rounded font-bold text-right"
+                      className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border font-bold text-right"
                       placeholder="0"
                       type="number"
                       value={newChannel.price_write}
@@ -885,7 +902,7 @@ export default function SettlementPage() {
                       Fwd 단가 ($)
                     </label>
                     <input
-                      className="w-full p-2 border rounded font-bold text-right"
+                      className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border font-bold text-right"
                       placeholder="0"
                       type="number"
                       value={newChannel.price_forward}
@@ -902,7 +919,7 @@ export default function SettlementPage() {
                       지갑주소
                     </label>
                     <input
-                      className="w-full p-2 border rounded font-mono"
+                      className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border font-mono"
                       placeholder="0x..."
                       value={newChannel.wallet_address}
                       onChange={(e) =>
@@ -937,7 +954,7 @@ export default function SettlementPage() {
                   <div className="col-span-5 flex justify-end">
                     <button
                       onClick={handleAddChannel}
-                      className="bg-gray-900 text-white rounded font-bold px-6 py-2 hover:bg-black transition-colors"
+                      className="bg-[#0037F0] text-white rounded-lg shadow-brand-glow font-bold px-6 py-2 hover:bg-blue-700 transition-colors"
                     >
                       등록
                     </button>
@@ -951,8 +968,8 @@ export default function SettlementPage() {
 
       {/* --- 수정 모달 (Edit Channel Modal) --- */}
       {isEditModalOpen && editingChannel && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl p-8 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 glass-modal-backdrop flex items-center justify-center z-50">
+          <div className="glass-modal w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-6">채널 정보 수정</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -960,7 +977,7 @@ export default function SettlementPage() {
                   Tier
                 </label>
                 <input
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingChannel.tier}
                   onChange={(e) =>
                     setEditingChannel({
@@ -975,7 +992,7 @@ export default function SettlementPage() {
                   구독자 수
                 </label>
                 <input
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingChannel.subscriber}
                   onChange={(e) =>
                     setEditingChannel({
@@ -990,7 +1007,7 @@ export default function SettlementPage() {
                   채널명
                 </label>
                 <input
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingChannel.channel_name}
                   onChange={(e) =>
                     setEditingChannel({
@@ -1005,7 +1022,7 @@ export default function SettlementPage() {
                   채널 링크
                 </label>
                 <input
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingChannel.channel_link}
                   onChange={(e) =>
                     setEditingChannel({
@@ -1021,7 +1038,7 @@ export default function SettlementPage() {
                 </label>
                 <input
                   type="number"
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingChannel.price_write}
                   onChange={(e) =>
                     setEditingChannel({
@@ -1037,7 +1054,7 @@ export default function SettlementPage() {
                 </label>
                 <input
                   type="number"
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingChannel.price_forward}
                   onChange={(e) =>
                     setEditingChannel({
@@ -1052,7 +1069,7 @@ export default function SettlementPage() {
                   지갑 주소
                 </label>
                 <input
-                  className="w-full p-2 border rounded font-mono"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border font-mono"
                   value={editingChannel.wallet_address}
                   onChange={(e) =>
                     setEditingChannel({
@@ -1067,7 +1084,7 @@ export default function SettlementPage() {
                   비고
                 </label>
                 <input
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingChannel.memo}
                   onChange={(e) =>
                     setEditingChannel({
@@ -1119,8 +1136,8 @@ export default function SettlementPage() {
 
       {/* --- [New] 정산 내역 수정 모달 (Settlement Edit Modal) --- */}
       {isSettlementEditOpen && editingSettlement && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6">
+        <div className="fixed inset-0 glass-modal-backdrop flex items-center justify-center z-50">
+          <div className="glass-modal w-full max-w-md p-6">
             <h2 className="text-xl font-bold mb-4">정산 내역 수정</h2>
             <div className="space-y-4">
               <div>
@@ -1129,7 +1146,7 @@ export default function SettlementPage() {
                 </label>
                 <input
                   type="date"
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingSettlement.created_at}
                   onChange={(e) =>
                     setEditingSettlement({
@@ -1144,7 +1161,7 @@ export default function SettlementPage() {
                   작업 유형
                 </label>
                 <select
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
                   value={editingSettlement.post_type}
                   onChange={(e) =>
                     setEditingSettlement({
