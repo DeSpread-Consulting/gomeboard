@@ -213,7 +213,7 @@ export default function KOLClient({
   return (
     <div className="flex flex-col gap-8">
       {/* 그래프 영역 */}
-      <div className="bg-white p-0 rounded-xl shadow-sm border h-[700px] relative overflow-hidden">
+      <div className="bg-white p-0 rounded-lg shadow-glass border border-gray-200 h-[700px] relative overflow-hidden">
         <ReactECharts
           option={chartOption}
           style={{ height: "100%", width: "100%" }}
@@ -221,7 +221,7 @@ export default function KOLClient({
       </div>
 
       {/* 리스트 영역 */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border">
+      <div className="bg-white p-6 rounded-lg shadow-glass border border-gray-200">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <h2 className="text-xl font-bold">
             📋 KOL 티어 리스트 ({filteredList.length})
@@ -230,7 +230,7 @@ export default function KOLClient({
             <input
               type="text"
               placeholder="채널명 검색..."
-              className="border rounded-md p-2 text-sm w-full md:w-64"
+              className="border border-gray-200 rounded-xl p-2 text-sm w-full md:w-64 bg-white outline-none focus:ring-2 focus:ring-[#0037F0]/30"
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -238,7 +238,7 @@ export default function KOLClient({
               }}
             />
             <select
-              className="border rounded-md p-2 bg-gray-50 text-sm min-w-[120px]"
+              className="border border-gray-200 rounded-xl p-2 bg-white text-sm min-w-[120px]"
               value={selectedTier}
               onChange={(e) => {
                 setSelectedTier(e.target.value);
@@ -259,7 +259,7 @@ export default function KOLClient({
         <div className="overflow-x-auto min-h-[500px]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b text-gray-500 text-sm bg-gray-50">
+              <tr className="border-b border-gray-200/50 text-gray-500 text-sm bg-gray-50">
                 <th className="py-3 px-4">티어</th>
                 <th className="py-3 px-4">채널명</th>
                 <th className="py-3 px-4">소속 그룹</th>
@@ -277,7 +277,7 @@ export default function KOLClient({
               {paginatedList.map((node) => (
                 <tr
                   key={node.channel_id}
-                  className="border-b hover:bg-gray-50 transition-colors"
+                  className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
                 >
                   <td className="py-3 px-4">
                     <span
@@ -355,7 +355,7 @@ export default function KOLClient({
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border rounded disabled:opacity-30 hover:bg-gray-50"
+              className="px-3 py-1 border border-gray-200 rounded-xl bg-white disabled:opacity-30 hover:bg-gray-50"
             >
               &lt; 이전
             </button>
@@ -365,7 +365,7 @@ export default function KOLClient({
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded disabled:opacity-30 hover:bg-gray-50"
+              className="px-3 py-1 border border-gray-200 rounded-xl bg-white disabled:opacity-30 hover:bg-gray-50"
             >
               다음 &gt;
             </button>

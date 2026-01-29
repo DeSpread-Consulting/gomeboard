@@ -25,26 +25,23 @@ export default function ReportClient({
   const { user, authenticated } = usePrivy();
 
   return (
-    <div className="flex-1 w-full bg-[#F5F5F7] text-[#1D1D1F] font-sans">
-      <main className="max-w-7xl mx-auto px-6 py-12">
-        <div className="mb-10">
-          <h1
-            className="text-[#0037F0] text-4xl font-black uppercase tracking-tighter mb-2 leading-[0.9]"
-            style={{ fontFamily: "'General Sans', sans-serif" }}
-          >
+    <div className="flex-1 w-full bg-[#F3F4F6] text-[#1D1D1F] font-sans">
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        <div className="mb-12">
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-1">
             Monthly Reports
           </h1>
-          <p className="text-gray-500 text-sm font-medium ml-1">
+          <p className="text-gray-500 text-sm font-medium">
             Target Period:{" "}
             <span className="text-black font-bold">{targetMonth}</span> (Last
             Month)
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-glass hover:shadow-md transition-shadow duration-300">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
+              <tr className="bg-gray-50 border-b border-gray-200/50 text-xs font-bold text-gray-500 uppercase tracking-wider">
                 <th className="px-6 py-4">Project</th>
                 <th className="px-6 py-4">Manager</th>
                 <th className="px-6 py-4">Status</th>
@@ -55,7 +52,7 @@ export default function ReportClient({
               {rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-blue-50/30 transition-colors group"
+                  className="hover:bg-gray-50 transition-colors group"
                 >
                   <td className="px-6 py-4">
                     <div className="flex flex-col">

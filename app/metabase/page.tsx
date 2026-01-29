@@ -60,8 +60,8 @@ export default async function MetabasePage() {
 
   if (!METABASE_PAGE_ID) {
     return (
-      <div className="min-h-screen bg-[#F5F5F7] flex flex-col items-center justify-center p-10">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 text-center">
+      <div className="min-h-screen bg-[#F3F4F6] flex flex-col items-center justify-center p-10">
+        <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 text-center">
           <h2 className="text-lg font-bold text-gray-900 mb-2">
             환경변수 설정 필요
           </h2>

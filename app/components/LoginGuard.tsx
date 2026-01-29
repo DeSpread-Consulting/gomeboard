@@ -3,6 +3,7 @@
 import React from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import Image from "next/image";
+import { ArrowRightIcon } from "@heroicons/react/24/outline";
 
 export default function LoginGuard() {
   const { login } = usePrivy();
@@ -40,22 +41,10 @@ export default function LoginGuard() {
         <div className="shrink-0 flex flex-col items-center justify-center gap-5 z-30 animate-in fade-in zoom-in duration-500">
           <button
             onClick={login}
-            className="group relative flex items-center justify-center gap-3 overflow-hidden rounded-full bg-[#0037F0] px-12 py-5 text-base font-bold text-white shadow-2xl transition-all duration-300 hover:scale-105 hover:bg-blue-700 active:scale-95"
+            className="group relative flex items-center justify-center gap-3 overflow-hidden rounded-full bg-[#0037F0] px-12 py-5 text-base font-bold text-white shadow-brand-glow transition-all duration-300 hover:scale-105 hover:bg-blue-700 active:scale-95"
           >
             <span className="relative z-10">Login / Sign up</span>
-            <svg
-              className="relative z-10 h-4 w-4 text-white/70 transition-colors group-hover:text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-              />
-            </svg>
+            <ArrowRightIcon className="relative z-10 h-4 w-4 text-white/70 transition-colors group-hover:text-white" />
           </button>
 
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[#0037F0]/40">

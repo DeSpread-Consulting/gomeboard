@@ -9,14 +9,14 @@ export default function Footer() {
     {
       name: "디스프레드 노션",
       url: "https://www.notion.so/despread-creative/",
-    }, // 예시
+    },
     { name: "메타베이스", url: "https://metabase.despreadlabs.io/" },
     {
       name: "대시보드",
       url: "https://dashboard.despreadlabs.io/projects",
     },
     { name: "대시보드 api", url: "https://mashboard-api.despreadlabs.io/api" },
-    { name: "디스프레드 리서치", url: "https://research.despread.io/" }, // 예시
+    { name: "디스프레드 리서치", url: "https://research.despread.io/" },
   ];
 
   return (
@@ -26,7 +26,7 @@ export default function Footer() {
           {/* 왼쪽: 로고 및 카피라이트 */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 bg-gray-900 text-white rounded flex items-center justify-center text-xs font-bold">
+              <div className="w-6 h-6 bg-[#0037F0] text-white rounded flex items-center justify-center text-xs font-bold">
                 D
               </div>
               <span className="font-bold text-gray-900">gomeboard</span>
@@ -51,7 +51,7 @@ export default function Footer() {
                       href={link.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="hover:text-blue-600 transition-colors"
+                      className="hover:text-[#0037F0] transition-colors"
                     >
                       {link.name}
                     </a>
@@ -60,17 +60,16 @@ export default function Footer() {
               </ul>
             </div>
 
-            {/* 필요하다면 섹션 추가 가능 */}
             <div>
               <h4 className="font-bold text-gray-900 mb-4 text-sm">Support</h4>
               <ul className="space-y-2 text-sm text-gray-500">
                 <li>
-                  <a href="#" className="hover:text-blue-600">
+                  <a href="#" className="hover:text-[#0037F0]">
                     hangome
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-blue-600">
+                  <a href="#" className="hover:text-[#0037F0]">
                     Admin Contact
                   </a>
                 </li>

@@ -192,18 +192,15 @@ export default function MyPage() {
     "User";
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] font-sans selection:bg-[#0037F0] selection:text-white">
-      <main className="max-w-7xl mx-auto px-6 py-12">
+    <div className="min-h-screen bg-[#F3F4F6] text-[#1D1D1F] font-sans selection:bg-[#0037F0] selection:text-white">
+      <main className="max-w-7xl mx-auto px-6 py-10">
         {/* 헤더 */}
-        <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <h1
-              className="text-[#0037F0] text-4xl font-black uppercase tracking-tighter mb-2 leading-[0.9]"
-              style={{ fontFamily: "'General Sans', sans-serif" }}
-            >
+            <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-1">
               My Page
             </h1>
-            <p className="text-gray-500 text-sm font-medium ml-1">
+            <p className="text-gray-500 text-sm font-medium">
               계정 및 활동 관리 대시보드
             </p>
           </div>
@@ -222,7 +219,7 @@ export default function MyPage() {
             {/* 프로필 & 채널 카드 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* 프로필 카드 */}
-              <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm flex items-center gap-4 relative overflow-hidden h-[100px] transition-all hover:border-[#0037F0]">
+              <div className="glass-card p-5 flex items-center gap-4 relative overflow-hidden h-[100px] transition-all glass-card-hover">
                 <div className="relative shrink-0">
                   <img
                     src={profileImage || ""}
@@ -257,7 +254,7 @@ export default function MyPage() {
               </div>
 
               {/* 채널 설정 카드 */}
-              <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm flex flex-col justify-center h-[100px] transition-all hover:border-[#0037F0]">
+              <div className="glass-card p-5 flex flex-col justify-center h-[100px] transition-all glass-card-hover">
                 {!isTelegramLinked ? (
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl">
@@ -404,8 +401,8 @@ export default function MyPage() {
             </div>
 
             {/* 연결된 계정 리스트 */}
-            <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+            <div className="bg-white rounded-lg overflow-hidden shadow-glass border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200/50 bg-gray-50 flex justify-between items-center">
                 <h3 className="font-bold text-gray-900 text-sm">
                   Linked Accounts
                 </h3>
@@ -491,7 +488,7 @@ export default function MyPage() {
             </div>
 
             {!isChannelLinked ? (
-              <div className="bg-white rounded-xl border border-dashed border-gray-300 p-8 text-center flex flex-col items-center justify-center h-64">
+              <div className="bg-white rounded-lg border border-dashed border-gray-200 p-8 text-center flex flex-col items-center justify-center h-64">
                 <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-2xl mb-3 grayscale opacity-50 border border-gray-100">
                   🔒
                 </div>
@@ -507,7 +504,7 @@ export default function MyPage() {
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
-                    className="h-[80px] bg-gray-100 rounded-xl animate-pulse border border-gray-200"
+                    className="h-[80px] bg-gray-50 rounded-lg animate-pulse border border-gray-200"
                   ></div>
                 ))}
               </div>
@@ -516,7 +513,7 @@ export default function MyPage() {
                 {myRanks.map((item, idx) => (
                   <div
                     key={idx}
-                    className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex flex-col justify-between hover:border-[#0037F0] hover:shadow-md transition-all group h-[90px]"
+                    className="bg-white rounded-lg p-4 shadow-glass border border-gray-200 flex flex-col justify-between hover:bg-gray-50 hover:shadow-md hover:border-gray-200 transition-all group h-[90px]"
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-2">
@@ -559,7 +556,7 @@ export default function MyPage() {
                 ))}
               </div>
             ) : (
-              <div className="bg-white rounded-xl border border-gray-200 p-8 text-center h-64 flex flex-col items-center justify-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-8 text-center h-64 flex flex-col items-center justify-center">
                 <div className="text-2xl mb-2">📉</div>
                 <p className="text-sm font-bold text-gray-900">No Data</p>
                 <p className="text-xs text-gray-500 mt-1">
@@ -587,7 +584,7 @@ function AccountRow({
   isPrimary = false,
 }: any) {
   return (
-    <div className="flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors group">
+    <div className="flex items-center justify-between px-6 py-4 hover:bg-white transition-colors group">
       <div className="flex items-center gap-4">
         <div
           className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg shadow-sm transition-colors ${

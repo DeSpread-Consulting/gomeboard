@@ -29,7 +29,7 @@ export default function RootLayout({
         />
       </head>
       {/* [핵심] bg-white로 설정하여 모든 틈새를 하얗게 만듭니다 */}
-      <body className="font-sans antialiased bg-white text-[#1D1D1F]">
+      <body className="font-sans antialiased bg-[#F3F4F6] text-[#1D1D1F]">
         <Providers>
           <AuthWrapper>{children}</AuthWrapper>
         </Providers>

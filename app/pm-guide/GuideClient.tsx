@@ -22,17 +22,14 @@ export default function GuideClient({ groups }: { groups: GuideGroup[] }) {
   const { user, authenticated } = usePrivy();
 
   return (
-    <div className="flex-1 w-full bg-[#F5F5F7] text-[#1D1D1F] font-sans">
-      <main className="max-w-7xl mx-auto px-6 py-12">
+    <div className="flex-1 w-full bg-[#F3F4F6] text-[#1D1D1F] font-sans">
+      <main className="max-w-7xl mx-auto px-6 py-10">
         {/* 헤더 섹션 */}
-        <div className="mb-10">
-          <h1
-            className="text-[#0037F0] text-4xl font-black uppercase tracking-tighter mb-2 leading-[0.9]"
-            style={{ fontFamily: "'General Sans', sans-serif" }}
-          >
+        <div className="mb-12">
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-1">
             PM Guide
           </h1>
-          <p className="text-gray-500 text-sm font-medium ml-1">
+          <p className="text-gray-500 text-sm font-medium">
             업무 온보딩 및 필수 가이드 모음
           </p>
         </div>
@@ -54,9 +51,9 @@ export default function GuideClient({ groups }: { groups: GuideGroup[] }) {
                     target="_blank"
                     rel="noreferrer"
                     // 대시보드 카드와 동일한 인터랙션 스타일 적용
-                    className="group flex items-center gap-4 p-4 rounded-xl bg-white border border-gray-200 transition-all duration-300 hover:border-[#0037F0] hover:shadow-xl hover:-translate-y-1"
+                    className="group flex items-center gap-4 p-4 rounded-xl bg-white border border-gray-200 transition-all duration-300 hover:bg-gray-50 hover:shadow-md hover:border-[#0037F0] hover:-translate-y-1"
                   >
-                    <div className="w-10 h-10 flex items-center justify-center text-xl shrink-0 bg-gray-50 rounded-lg group-hover:bg-blue-50 transition-colors">
+                    <div className="w-10 h-10 flex items-center justify-center text-xl shrink-0 bg-white rounded-lg group-hover:bg-blue-50/50 transition-colors">
                       {item.icon && !item.icon.startsWith("http") ? (
                         <span>{item.icon}</span>
                       ) : item.icon ? (
@@ -80,7 +77,7 @@ export default function GuideClient({ groups }: { groups: GuideGroup[] }) {
         </div>
 
         {groups.length === 0 && (
-          <div className="text-center py-20 text-gray-400 bg-white rounded-xl border border-gray-200 border-dashed">
+          <div className="text-center py-20 text-gray-400 bg-white rounded-lg border border-gray-200 border-dashed">
             <p className="mb-2">데이터를 불러오지 못했습니다.</p>
             <code className="text-xs bg-gray-100 px-2 py-1 rounded">
               NOTION_PM_GUIDE_PAGE_ID

@@ -12,21 +12,18 @@ interface MetabaseClientProps {
 
 export default function MetabaseClient({ blocks }: MetabaseClientProps) {
   return (
-    <div className="flex-1 w-full bg-[#F5F5F7] text-[#1D1D1F] font-sans">
-      <main className="max-w-7xl mx-auto px-6 py-12">
-        <div className="mb-10">
-          <h1
-            className="text-[#0037F0] text-4xl font-black uppercase tracking-tighter mb-2 leading-[0.9]"
-            style={{ fontFamily: "'General Sans', sans-serif" }}
-          >
+    <div className="flex-1 w-full bg-[#F3F4F6] text-[#1D1D1F] font-sans">
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        <div className="mb-12">
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-1">
             Metabase
           </h1>
-          <p className="text-gray-500 text-sm font-medium ml-1">
+          <p className="text-gray-500 text-sm font-medium">
             데이터 시각화 차트 및 관련 가이드
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-8 md:p-12 shadow-sm">
+        <div className="bg-white rounded-lg border border-gray-200 p-8 md:p-12 shadow-glass">
           <BlockListRenderer blocks={blocks} level={0} />
 
           {blocks.length === 0 && (

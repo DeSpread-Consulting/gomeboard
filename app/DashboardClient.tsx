@@ -2,6 +2,12 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import {
+  FolderIcon,
+  DocumentTextIcon,
+  BoltIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 
 // 데이터 타입 정의
 export interface ProjectCard {
@@ -15,11 +21,10 @@ export interface ProjectCard {
   periodStart: string;
   manager: string;
   managerImage: string | null;
-  // [수정] PoC 프로필 이미지를 위한 필드 추가
-  poc: string; // Point of Contact
+  poc: string;
   pocImage: string | null;
   workScope: string[];
-  reportStatus?: string; // "Approved" | "Pending" | "Issue" | "N/A"
+  reportStatus?: string;
   apiProjectId?: string;
 }
 
@@ -89,20 +94,16 @@ export default function DashboardClient({
   }, [projects, filter, sortKey, sortOrder, isOverview]);
 
   return (
-    // [유지] 배경색을 흰색(bg-white)으로 통일 (layout.tsx와 일치)
-    <div className="flex-1 w-full bg-[#F5F5F7] text-[#1D1D1F] font-sans">
+    <div className="flex-1 w-full bg-[#F3F4F6] text-[#1D1D1F] font-sans">
       {/* 컨텐츠 래퍼 */}
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="max-w-7xl mx-auto px-6 py-10">
         {/* 헤더 섹션 */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-10 gap-6">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-12 gap-6">
           <div>
-            <h1
-              className="text-[#0037F0] text-4xl font-black uppercase tracking-tighter mb-2 leading-[0.9]"
-              style={{ fontFamily: "'General Sans', sans-serif" }}
-            >
+            <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-1">
               {isOverview ? "Overview" : title}
             </h1>
-            <p className="text-gray-500 text-sm font-medium ml-1">
+            <p className="text-gray-500 text-sm font-medium">
               {isOverview
                 ? "주요 프로젝트 및 자동화 프로세스 요약"
                 : "전체 프로젝트 현황 모니터링"}
@@ -111,8 +112,8 @@ export default function DashboardClient({
 
           {!isOverview && (
             <div className="flex flex-wrap items-center gap-3">
-              {/* [수정] Sort Control: 오름차순/내림차순 표시 추가 */}
-              <div className="flex items-center bg-white rounded-lg px-3 py-1.5 border border-gray-200 shadow-sm">
+              {/* Sort Control */}
+              <div className="flex items-center bg-white rounded-xl px-3 py-1.5 border border-gray-200 shadow-glass">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-3">
                   Sort
                 </span>
@@ -139,7 +140,6 @@ export default function DashboardClient({
                       }`}
                     >
                       {opt.label}
-                      {/* [추가] 정렬 방향 인디케이터 (▲/▼) */}
                       {sortKey === opt.key && (
                         <span className="text-[8px] text-[#0037F0]">
                           {sortOrder === "asc" ? "▲" : "▼"}
@@ -151,7 +151,7 @@ export default function DashboardClient({
               </div>
 
               {/* Filter Tabs */}
-              <div className="bg-white border border-gray-200 p-1 rounded-lg inline-flex shadow-sm">
+              <div className="bg-white border border-gray-200 p-1 rounded-xl inline-flex shadow-glass">
                 {[
                   { key: "all", label: "All" },
                   { key: "active", label: "Active" },
@@ -160,9 +160,9 @@ export default function DashboardClient({
                   <button
                     key={tab.key}
                     onClick={() => setFilter(tab.key)}
-                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 ${
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all duration-200 ${
                       filter === tab.key
-                        ? "bg-[#F5F5F7] text-black shadow-inner"
+                        ? "bg-white text-black shadow-sm"
                         : "text-gray-400 hover:text-gray-700"
                     }`}
                   >
@@ -178,7 +178,8 @@ export default function DashboardClient({
         <section className="mb-16">
           <div className="flex justify-between items-center mb-5">
             <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              📂 Active Projects
+              <FolderIcon className="w-5 h-5 text-gray-500" />
+              Active Projects
             </h2>
             {isOverview && (
               <Link
@@ -194,23 +195,23 @@ export default function DashboardClient({
             {processedProjects.map((project) => (
               <div
                 key={project.id}
-                className="group relative bg-white rounded-xl border border-gray-200 
-                  transition-all duration-300 
-                  hover:border-[#0037F0] hover:shadow-xl hover:-translate-y-1 
+                className="group relative bg-white rounded-lg border border-gray-200 shadow-glass
+                  transition-all duration-300
+                  hover:bg-gray-50 hover:shadow-md hover:border-gray-200 hover:-translate-y-1
                   flex flex-col overflow-visible"
               >
                 {/* 카드 상단: 팀 뱃지 & 리포트 상태 */}
                 <div className="px-5 py-4 flex justify-between items-start">
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide ${
                       project.team.includes("1팀")
-                        ? "bg-red-50 text-red-600"
+                        ? "bg-red-50/80 text-red-600"
                         : project.team.includes("2팀")
-                        ? "bg-orange-50 text-orange-600"
+                        ? "bg-orange-50/80 text-orange-600"
                         : project.team.includes("3팀")
-                        ? "bg-purple-50 text-purple-600"
+                        ? "bg-purple-50/80 text-purple-600"
                         : "bg-gray-100 text-gray-500"
-                    }`}
+                    } border border-gray-200`}
                   >
                     {project.team}
                   </span>
@@ -253,7 +254,7 @@ export default function DashboardClient({
                 {/* 메인 컨텐츠 */}
                 <div className="px-5 pb-3 flex-1">
                   <div className="flex items-start gap-3 mb-4">
-                    <div className="w-10 h-10 flex items-center justify-center text-xl bg-gray-50 rounded-lg border border-gray-100 shrink-0 group-hover:bg-blue-50/50 transition-colors">
+                    <div className="w-10 h-10 flex items-center justify-center text-xl bg-white rounded-lg border border-gray-200 shrink-0 group-hover:bg-blue-50/50 transition-colors">
                       {project.icon && !project.icon.startsWith("http") ? (
                         project.icon
                       ) : project.icon ? (
@@ -263,7 +264,7 @@ export default function DashboardClient({
                           className="w-5 h-5 object-contain"
                         />
                       ) : (
-                        "📄"
+                        <DocumentTextIcon className="w-5 h-5 text-gray-400" />
                       )}
                     </div>
                     <div className="min-w-0 pt-0.5">
@@ -276,7 +277,7 @@ export default function DashboardClient({
                     </div>
                   </div>
 
-                  <div className="mb-4 pt-3 border-t border-dashed border-gray-100 space-y-2">
+                  <div className="mb-4 pt-3 border-t border-dashed border-gray-200 space-y-2">
                     {/* Manager Row */}
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-gray-400 font-medium">Manager</span>
@@ -285,10 +286,10 @@ export default function DashboardClient({
                           <img
                             src={project.managerImage}
                             alt={project.manager}
-                            className="w-4 h-4 rounded-full border border-gray-100 object-cover"
+                            className="w-4 h-4 rounded-full border border-gray-200 object-cover"
                           />
                         ) : (
-                          <div className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-500">
+                          <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center text-[8px] font-bold text-gray-500">
                             {project.manager.slice(0, 1)}
                           </div>
                         )}
@@ -298,7 +299,7 @@ export default function DashboardClient({
                       </div>
                     </div>
 
-                    {/* [수정] PoC Row에도 프로필 이미지 적용 */}
+                    {/* PoC Row */}
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-gray-400 font-medium">PoC</span>
                       <div className="flex items-center gap-1.5">
@@ -306,11 +307,10 @@ export default function DashboardClient({
                           <img
                             src={project.pocImage}
                             alt={project.poc}
-                            className="w-4 h-4 rounded-full border border-gray-100 object-cover"
+                            className="w-4 h-4 rounded-full border border-gray-200 object-cover"
                           />
                         ) : (
-                          <div className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-500">
-                            {/* 이름이 없으면 '-' 표시 */}
+                          <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center text-[8px] font-bold text-gray-500">
                             {project.poc ? project.poc.slice(0, 1) : "-"}
                           </div>
                         )}
@@ -326,7 +326,7 @@ export default function DashboardClient({
                     {project.workScope.map((scope, idx) => (
                       <span
                         key={idx}
-                        className="px-1.5 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-medium rounded border border-gray-100"
+                        className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-medium rounded-lg border border-gray-200"
                       >
                         {scope}
                       </span>
@@ -335,18 +335,18 @@ export default function DashboardClient({
                 </div>
 
                 {/* 하단 정보 */}
-                <div className="px-5 py-3 mt-2 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between gap-4">
+                <div className="px-5 py-3 mt-2 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-4">
                   <span
-                    className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded border ${
+                    className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-lg border ${
                       project.status === "진행 중"
-                        ? "bg-blue-50 text-[#0037F0] border-blue-100"
+                        ? "bg-blue-50/80 text-[#0037F0] border-blue-100/50"
                         : "bg-gray-100 text-gray-500 border-gray-200"
                     }`}
                   >
                     {project.status}
                   </span>
                   <div className="flex-1 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1.5 bg-gray-50 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full ${
                           project.progress === 100
@@ -367,23 +367,10 @@ export default function DashboardClient({
         </section>
 
         {isOverview && (
-          // 배경 흰색 + 보더만 사용 (그림자 X)
-          <section className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  ></path>
-                </svg>
+          <section className="glass-card p-6">
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
+              <div className="p-2 bg-indigo-50/80 text-indigo-600 rounded-lg">
+                <BoltIcon className="w-5 h-5" />
               </div>
               <h2 className="text-lg font-bold text-gray-900">
                 Automation Status
@@ -416,11 +403,11 @@ export default function DashboardClient({
       {selectedProcess && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity"
+            className="absolute inset-0 glass-modal-backdrop transition-opacity"
             onClick={() => setSelectedProcess(null)}
           ></div>
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-[fadeIn_0.2s_ease-out]">
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <div className="relative glass-modal w-full max-w-md overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+            <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
               <h3 className="font-bold text-lg text-gray-900">
                 {selectedProcess.title}
               </h3>
@@ -428,15 +415,15 @@ export default function DashboardClient({
                 onClick={() => setSelectedProcess(null)}
                 className="text-gray-400 hover:text-black"
               >
-                ✕
+                <XMarkIcon className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6">
               <span
-                className={`inline-block px-2 py-1 text-[10px] font-bold rounded mb-4 ${
+                className={`inline-block px-2 py-1 text-[10px] font-bold rounded-lg mb-4 ${
                   selectedProcess.status === "AUTO"
-                    ? "bg-blue-50 text-[#0037F0]"
-                    : "bg-orange-50 text-orange-600"
+                    ? "bg-blue-50/80 text-[#0037F0]"
+                    : "bg-orange-50/80 text-orange-600"
                 }`}
               >
                 {selectedProcess.status}
@@ -454,7 +441,7 @@ export default function DashboardClient({
                       {selectedProcess.techStack.map((tag) => (
                         <span
                           key={tag}
-                          className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-medium text-gray-600"
+                          className="px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600"
                         >
                           {tag}
                         </span>
@@ -465,7 +452,7 @@ export default function DashboardClient({
               <a
                 href={selectedProcess.notionUrl}
                 target="_blank"
-                className="block w-full bg-[#0037F0] hover:bg-blue-700 text-white text-center py-3 rounded-lg text-sm font-bold transition-colors"
+                className="block w-full bg-[#0037F0] hover:bg-blue-700 text-white text-center py-3 rounded-lg text-sm font-bold transition-colors shadow-brand-glow"
               >
                 View Guide
               </a>
@@ -490,14 +477,14 @@ function ProcessItem({
   return (
     <div
       onClick={onClick}
-      className="group flex items-center gap-3 p-3 rounded-lg border border-transparent hover:bg-white hover:border-gray-200 transition-all cursor-pointer bg-gray-50"
+      className="group flex items-center gap-3 p-3 rounded-xl border border-transparent hover:bg-white hover:border-gray-200 transition-all cursor-pointer bg-gray-50"
     >
       <div
         className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 border
          ${
            isAuto
-             ? "bg-white text-[#0037F0] border-gray-100"
-             : "bg-white text-orange-500 border-gray-100"
+             ? "bg-white text-[#0037F0] border-gray-200"
+             : "bg-white text-orange-500 border-gray-200"
          }
         `}
       >
@@ -506,7 +493,7 @@ function ProcessItem({
         ) : icon ? (
           <img src={icon} alt="" className="w-4 h-4 object-contain" />
         ) : (
-          "⚡"
+          <BoltIcon className="w-4 h-4" />
         )}
       </div>
       <div className="flex-1 min-w-0 flex justify-between items-center">
@@ -514,10 +501,10 @@ function ProcessItem({
           {title}
         </span>
         <span
-          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ml-2 ${
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-lg ml-2 ${
             isAuto
-              ? "bg-blue-100 text-blue-700"
-              : "bg-orange-100 text-orange-700"
+              ? "bg-blue-100/80 text-blue-700"
+              : "bg-orange-100/80 text-orange-700"
           }`}
         >
           {status}
