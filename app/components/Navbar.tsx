@@ -26,6 +26,7 @@ export default function Navbar() {
   // 메뉴 리스트 구조 변경 (children 속성 추가)
   const navLinks = [
     { name: "Overview", path: "/", allowed: ["internal"] },
+    { name: "Crypto", path: "/crypto-dashboard", allowed: ["internal"] },
     { name: "Projects", path: "/projects", allowed: ["internal"] },
     { name: "Reports", path: "/reports", allowed: ["internal"] },
     { name: "PM Guide", path: "/pm-guide", allowed: ["internal"] },
