@@ -53,6 +53,13 @@ export default function MyPage() {
   const [myRanks, setMyRanks] = useState<LeaderboardItem[]>([]);
   const [isLoadingRank, setIsLoadingRank] = useState(false);
 
+  // 팝업 모달 상태
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [verifyStep, setVerifyStep] = useState<
+    "guide" | "verify" | "success" | "error"
+  >("guide");
+  const [verifyError, setVerifyError] = useState("");
+
   // 1. 초기화 (저장된 채널 정보 로드)
   useEffect(() => {
     const saved = localStorage.getItem("my_telegram_channel");
@@ -99,13 +106,28 @@ export default function MyPage() {
       .replace("http://", "");
   };
 
-  // 채널 인증 핸들러
+  // 채널 인증 버튼 클릭 (모달 열기)
+  const handleOpenVerifyModal = () => {
+    setShowVerifyModal(true);
+    setVerifyStep("guide");
+    setChannelInput("");
+    setVerifyError("");
+  };
+
+  // 가이드 단계에서 다음 버튼 클릭
+  const handleNextToVerify = () => {
+    setVerifyStep("verify");
+  };
+
+  // 채널 인증 실행
   const handleVerifyChannel = async () => {
     if (!channelInput || !user?.telegram?.telegramUserId) return;
 
-    const cleanId = cleanInput(channelInput); // 링크를 핸들로 변환
+    const cleanId = cleanInput(channelInput);
 
     setIsVerifying(true);
+    setVerifyError("");
+
     try {
       const response = await fetch("/api/verify-channel", {
         method: "POST",
@@ -129,20 +151,33 @@ export default function MyPage() {
         setMyChannel(channelData);
         localStorage.setItem(
           "my_telegram_channel",
-          JSON.stringify(channelData)
+          JSON.stringify(channelData),
         );
-        setChannelInput("");
 
-        // 인증 성공 후 랭킹 즉시 조회 (로딩 표시됨)
+        // 성공 단계로 이동
+        setVerifyStep("success");
+
+        // 인증 성공 후 랭킹 즉시 조회
         fetchMyRank(channelData.handle);
       } else {
-        alert(`❌ 검증 실패: ${data.message || "오류가 발생했습니다."}`);
+        // 에러 단계로 이동
+        setVerifyError(data.message || "오류가 발생했습니다.");
+        setVerifyStep("error");
       }
     } catch (e) {
-      alert("서버 오류가 발생했습니다.");
+      setVerifyError("서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      setVerifyStep("error");
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  // 모달 닫기
+  const handleCloseModal = () => {
+    setShowVerifyModal(false);
+    setChannelInput("");
+    setVerifyError("");
+    setVerifyStep("guide");
   };
 
   const handleDeleteChannel = () => {
@@ -276,26 +311,19 @@ export default function MyPage() {
                     </button>
                   </div>
                 ) : !myChannel ? (
-                  <div className="space-y-2">
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        placeholder="t.me/channel"
-                        value={channelInput}
-                        onChange={(e) => setChannelInput(e.target.value)}
-                        className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold focus:border-[#0037F0] focus:bg-white outline-none transition-all"
-                      />
-                      <button
-                        onClick={handleVerifyChannel}
-                        disabled={!channelInput || isVerifying}
-                        className="bg-[#0037F0] text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-800 whitespace-nowrap transition-colors"
-                      >
-                        {isVerifying ? "..." : "인증"}
-                      </button>
+                  <div className="flex flex-col gap-2 justify-center">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xl">📢</span>
+                      <h4 className="text-xs font-bold text-gray-900">
+                        채널 인증 필요
+                      </h4>
                     </div>
-                    <p className="text-[10px] text-gray-400 pl-1">
-                      * <strong>@gome_login_bot</strong> 관리자 추가 필수
-                    </p>
+                    <button
+                      onClick={handleOpenVerifyModal}
+                      className="bg-[#0037F0] text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors"
+                    >
+                      채널 인증하기
+                    </button>
                   </div>
                 ) : (
                   // [수정] 채널 인증 완료 상태: 이미지 크기 및 정보 표시 개선
@@ -541,8 +569,8 @@ export default function MyPage() {
                           item.change > 0
                             ? "text-red-500"
                             : item.change < 0
-                            ? "text-blue-500"
-                            : "text-gray-400"
+                              ? "text-blue-500"
+                              : "text-gray-400"
                         }`}
                       >
                         {item.change !== 0
@@ -567,6 +595,342 @@ export default function MyPage() {
           </div>
         </div>
       </main>
+
+      {/* 채널 인증 프로세스 모달 */}
+      {showVerifyModal && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={handleCloseModal}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fadeIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Step 1: 가이드 */}
+            {verifyStep === "guide" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">
+                    채널 소유권 인증
+                  </h3>
+                  <button
+                    onClick={handleCloseModal}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">ℹ️</span>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-blue-900 mb-2">
+                        인증 전 준비사항
+                      </h4>
+                      <p className="text-xs text-blue-700 leading-relaxed">
+                        채널 소유권을 확인하기 위해 봇을 임시로 추가해야 합니다.
+                        인증 완료 후 제거하셔도 됩니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold text-gray-900">
+                    ✅ 진행 단계
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-3 text-xs">
+                      <span className="bg-[#0037F0] text-white font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px]">
+                        1
+                      </span>
+                      <p className="text-gray-700 leading-relaxed">
+                        텔레그램 앱에서 인증하려는 <strong>채널</strong>로 이동
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-3 text-xs">
+                      <span className="bg-[#0037F0] text-white font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px]">
+                        2
+                      </span>
+                      <p className="text-gray-700 leading-relaxed">
+                        채널 설정 → <strong>관리자(Administrators)</strong>{" "}
+                        메뉴로 이동
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-3 text-xs">
+                      <span className="bg-[#0037F0] text-white font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px]">
+                        3
+                      </span>
+                      <p className="text-gray-700 leading-relaxed">
+                        <strong className="text-[#0037F0]">@BGT_gomebot</strong>{" "}
+                        검색 후 관리자로 추가
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-3 text-xs">
+                      <span className="bg-[#0037F0] text-white font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px]">
+                        4
+                      </span>
+                      <p className="text-gray-700 leading-relaxed">
+                        봇 추가 완료 후 아래 <strong>"다음"</strong> 버튼 클릭
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleNextToVerify}
+                  className="w-full bg-[#0037F0] text-white py-3 rounded-lg font-bold text-sm hover:bg-blue-800 transition-colors"
+                >
+                  다음
+                </button>
+              </div>
+            )}
+
+            {/* Step 2: 채널 입력 및 인증 */}
+            {verifyStep === "verify" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">
+                    채널 주소 입력
+                  </h3>
+                  <button
+                    onClick={handleCloseModal}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="block">
+                    <span className="text-xs font-bold text-gray-700 mb-2 block">
+                      채널 주소 또는 핸들
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="예: t.me/your_channel 또는 @your_channel"
+                      value={channelInput}
+                      onChange={(e) => setChannelInput(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-[#0037F0] focus:bg-white outline-none transition-all"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && channelInput && !isVerifying) {
+                          handleVerifyChannel();
+                        }
+                      }}
+                    />
+                  </label>
+
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-600 leading-relaxed">
+                      <strong>💡 팁:</strong> 채널 링크(t.me/channel),
+                      핸들(@channel), 또는 핸들명(channel) 모두 가능합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setVerifyStep("guide")}
+                    className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-bold text-sm hover:bg-gray-200 transition-colors"
+                  >
+                    이전
+                  </button>
+                  <button
+                    onClick={handleVerifyChannel}
+                    disabled={!channelInput || isVerifying}
+                    className="flex-1 bg-[#0037F0] text-white py-3 rounded-lg font-bold text-sm hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isVerifying ? "인증 중..." : "인증하기"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: 성공 */}
+            {verifyStep === "success" && myChannel && (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center text-center py-6">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                    <svg
+                      className="w-8 h-8 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    ✅ 인증 완료!
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    채널 소유권이 확인되었습니다.
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    {myChannel.photoUrl ? (
+                      <img
+                        src={myChannel.photoUrl}
+                        alt=""
+                        className="w-12 h-12 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-[#0037F0] font-bold text-lg">
+                        {myChannel.title[0]}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-sm text-gray-900 truncate">
+                        {myChannel.title}
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        @{myChannel.handle}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">구독자 수</span>
+                    <span className="font-bold text-gray-900">
+                      {myChannel.subscribers?.toLocaleString() || 0}명
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <span className="text-lg">💡</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-blue-700 leading-relaxed">
+                        <strong>안내:</strong> 이제{" "}
+                        <strong className="text-[#0037F0]">@BGT_gomebot</strong>
+                        을 채널 관리자에서 제거하셔도 됩니다.
+                      </p>
+                      <p className="text-xs text-blue-700 mt-2 leading-relaxed">
+                        ⚠️ 소유주 연동 유지를 위해{" "}
+                        <strong>텔레그램 계정 연결은 해제하지 마세요</strong>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleCloseModal}
+                  className="w-full bg-[#0037F0] text-white py-3 rounded-lg font-bold text-sm hover:bg-blue-800 transition-colors"
+                >
+                  확인
+                </button>
+              </div>
+            )}
+
+            {/* Step 4: 실패 */}
+            {verifyStep === "error" && (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center text-center py-6">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                    <svg
+                      className="w-8 h-8 text-red-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    ❌ 인증 실패
+                  </h3>
+                  <p className="text-sm text-red-600 font-medium">
+                    {verifyError}
+                  </p>
+                </div>
+
+                <div className="bg-orange-50 border border-orange-100 rounded-lg p-4">
+                  <h4 className="text-xs font-bold text-orange-900 mb-2">
+                    📋 확인 사항
+                  </h4>
+                  <ul className="space-y-1.5 text-xs text-orange-700">
+                    <li className="flex items-start gap-2">
+                      <span>•</span>
+                      <span>
+                        <strong>@BGT_gomebot</strong>이 채널의 관리자로 추가되어
+                        있는지 확인
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span>•</span>
+                      <span>
+                        채널 주소가 올바른지 확인 (예: t.me/channel_name)
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span>•</span>
+                      <span>
+                        본인이 채널의 <strong>소유주(Creator)</strong>인지 확인
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCloseModal}
+                    className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-bold text-sm hover:bg-gray-200 transition-colors"
+                  >
+                    닫기
+                  </button>
+                  <button
+                    onClick={() => {
+                      setVerifyStep("verify");
+                      setVerifyError("");
+                    }}
+                    className="flex-1 bg-[#0037F0] text-white py-3 rounded-lg font-bold text-sm hover:bg-blue-800 transition-colors"
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
