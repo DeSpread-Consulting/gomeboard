@@ -29,8 +29,6 @@ export default function Navbar() {
     { name: "Crypto", path: "/crypto-dashboard", allowed: ["internal"] },
     { name: "Projects", path: "/projects", allowed: ["internal"] },
     { name: "Reports", path: "/reports", allowed: ["internal"] },
-    { name: "PM Guide", path: "/pm-guide", allowed: ["internal"] },
-    { name: "Metabase", path: "/metabase", allowed: ["internal"] },
     {
       name: "Mindshare",
       path: "/storyteller",
