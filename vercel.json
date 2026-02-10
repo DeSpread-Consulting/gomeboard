@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/storyteller",
       "schedule": "00 15 * * *"
+    },
+    {
+      "path": "/api/cron/update-channels",
+      "schedule": "30 14 * * *"
     }
   ]
 }
