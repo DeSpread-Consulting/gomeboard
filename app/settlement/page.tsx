@@ -858,26 +858,37 @@ ${links}`;
         </div>
 
         {/* Tabs */}
-        <div className="bg-white p-1.5 rounded-xl border border-gray-200 inline-flex shadow-glass">
-          {[
-            { id: "dashboard", label: "정산 요약", Icon: ChartBarIcon },
-            { id: "submit", label: "링크 등록", Icon: RocketLaunchIcon },
-            { id: "request", label: "컨텐츠 요청", Icon: MegaphoneIcon },
-            { id: "channels", label: "채널 관리", Icon: Cog6ToothIcon },
-          ].map((tab) => (
+        <div className="flex items-center justify-between">
+          <div className="bg-white p-1.5 rounded-xl border border-gray-200 inline-flex shadow-glass">
+            {[
+              { id: "dashboard", label: "정산 요약", Icon: ChartBarIcon },
+              { id: "submit", label: "링크 등록", Icon: RocketLaunchIcon },
+              { id: "request", label: "컨텐츠 요청", Icon: MegaphoneIcon },
+              { id: "channels", label: "채널 관리", Icon: Cog6ToothIcon },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-5 py-2.5 text-sm font-bold rounded-md transition-all duration-200 flex items-center gap-1.5 ${
+                  activeTab === tab.id
+                    ? "bg-[#0037F0] text-white shadow-brand-glow"
+                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+              >
+                <tab.Icon className="w-4 h-4 inline" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {activeTab === "channels" && (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-5 py-2.5 text-sm font-bold rounded-md transition-all duration-200 flex items-center gap-1.5 ${
-                activeTab === tab.id
-                  ? "bg-[#0037F0] text-white shadow-brand-glow"
-                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
-              }`}
+              onClick={() => setIsPdfModalOpen(true)}
+              className="px-4 py-2.5 bg-white border border-gray-300 rounded-lg font-bold text-sm text-gray-700 hover:bg-gray-100 transition-colors shadow-sm flex items-center gap-1.5"
             >
-              <tab.Icon className="w-4 h-4 inline" />
-              {tab.label}
+              <DocumentArrowDownIcon className="w-4 h-4" />
+              공유 (PDF)
             </button>
-          ))}
+          )}
         </div>
 
         <div className="transition-all duration-300">
@@ -1396,15 +1407,6 @@ ${links}`;
           {/* TAB 4: 채널 관리 */}
           {activeTab === "channels" && (
             <div className="space-y-8">
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setIsPdfModalOpen(true)}
-                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg font-bold text-sm text-gray-700 hover:bg-gray-100 transition-colors shadow-sm flex items-center gap-1.5"
-                >
-                  <DocumentArrowDownIcon className="w-4 h-4" />
-                  공유 (PDF)
-                </button>
-              </div>
               <div className="bg-white rounded-lg border border-gray-200 shadow-glass overflow-hidden">
                 <table className="w-full text-sm text-left">
                   <thead className="bg-gray-50 text-gray-600 font-bold uppercase text-xs">
