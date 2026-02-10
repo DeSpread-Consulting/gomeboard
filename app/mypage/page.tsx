@@ -1,9 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { usePrivy } from "@privy-io/react-auth";
+import React, { useState, useEffect, useCallback } from "react";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { useWallets as useSolanaWallets } from "@privy-io/react-auth/solana";
 import Link from "next/link";
+import {
+  fetchEvmBalance,
+  fetchEvmUsdtBalance,
+  fetchSolBalance,
+  fetchSolanaUsdtBalance,
+} from "@/utils/balance";
 
 // ----------------------------------------------------------------------
 // [타입 정의]
@@ -45,6 +52,20 @@ export default function MyPage() {
     linkWallet,
     unlinkWallet,
   } = usePrivy();
+
+  const { wallets: evmWallets } = useWallets();
+  const { wallets: solanaWallets } = useSolanaWallets();
+
+  // [State] - Wallet balances
+  const [balances, setBalances] = useState({
+    ethMainnet: "0",
+    ethArbitrum: "0",
+    sol: "0",
+    usdtEth: "0",
+    usdtArb: "0",
+    usdtSol: "0",
+  });
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   // [State]
   const [channelInput, setChannelInput] = useState("");
@@ -187,6 +208,71 @@ export default function MyPage() {
       localStorage.removeItem("my_telegram_channel");
     }
   };
+
+  // --- Wallet address extraction ---
+  const embeddedEvmWallet = user?.linkedAccounts?.find(
+    (a: any) =>
+      a.type === "wallet" &&
+      a.chainType === "ethereum" &&
+      (a.walletClientType === "privy" || a.walletClientType === "privy-v2")
+  );
+  const evmAddress =
+    (embeddedEvmWallet as any)?.address || user?.wallet?.address || null;
+
+  const embeddedSolWallet = user?.linkedAccounts?.find(
+    (a: any) =>
+      a.type === "wallet" &&
+      a.chainType === "solana" &&
+      (a.walletClientType === "privy" || a.walletClientType === "privy-v2")
+  );
+  // linkedAccounts에서 먼저 찾고, 없으면 Solana useWallets 훅에서 fallback
+  const solWalletFromHook = solanaWallets.find(
+    (w) => (w as any).walletClientType === "privy" || (w as any).walletClientType === "privy-v2"
+  );
+  const solAddress =
+    (embeddedSolWallet as any)?.address ||
+    solWalletFromHook?.address ||
+    null;
+
+  // External wallets (non-privy)
+  const externalWallets = (user?.linkedAccounts || []).filter(
+    (a: any) =>
+      a.type === "wallet" &&
+      a.walletClientType !== "privy" &&
+      a.walletClientType !== "privy-v2"
+  );
+
+  // --- Balance fetching ---
+  const loadBalances = useCallback(async () => {
+    if (!evmAddress && !solAddress) return;
+    setBalanceLoading(true);
+    try {
+      const results = await Promise.allSettled([
+        evmAddress ? fetchEvmBalance(evmAddress, "ethereum") : Promise.resolve("0"),
+        evmAddress ? fetchEvmBalance(evmAddress, "arbitrum") : Promise.resolve("0"),
+        solAddress ? fetchSolBalance(solAddress) : Promise.resolve("0"),
+        evmAddress ? fetchEvmUsdtBalance(evmAddress, "ethereum") : Promise.resolve("0"),
+        evmAddress ? fetchEvmUsdtBalance(evmAddress, "arbitrum") : Promise.resolve("0"),
+        solAddress ? fetchSolanaUsdtBalance(solAddress) : Promise.resolve("0"),
+      ]);
+      setBalances({
+        ethMainnet: results[0].status === "fulfilled" ? results[0].value : "0",
+        ethArbitrum: results[1].status === "fulfilled" ? results[1].value : "0",
+        sol: results[2].status === "fulfilled" ? results[2].value : "0",
+        usdtEth: results[3].status === "fulfilled" ? results[3].value : "0",
+        usdtArb: results[4].status === "fulfilled" ? results[4].value : "0",
+        usdtSol: results[5].status === "fulfilled" ? results[5].value : "0",
+      });
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, [evmAddress, solAddress]);
+
+  useEffect(() => {
+    if (ready && authenticated && user) {
+      loadBalances();
+    }
+  }, [ready, authenticated, user, loadBalances]);
 
   if (!ready || !authenticated || !user) return null;
 
@@ -485,18 +571,138 @@ export default function MyPage() {
                   onLink={linkEmail}
                   onUnlink={() => unlinkEmail(user.email!.address)}
                 />
-                <AccountRow
-                  icon="🦊"
-                  name="Wallet"
-                  isConnected={!!user.wallet}
-                  identifier={
-                    user.wallet?.address
-                      ? `${user.wallet.address.slice(0, 6)}...`
-                      : null
-                  }
-                  onLink={linkWallet}
-                  onUnlink={() => unlinkWallet(user.wallet!.address)}
-                />
+              </div>
+            </div>
+
+            {/* Privy Wallet 카드 */}
+            <div className="bg-white rounded-lg overflow-hidden shadow-glass border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200/50 bg-gray-50 flex justify-between items-center">
+                <h3 className="font-bold text-gray-900 text-sm">
+                  Privy Wallet
+                </h3>
+                <button
+                  onClick={loadBalances}
+                  disabled={balanceLoading}
+                  className="text-xs font-bold text-gray-400 hover:text-[#0037F0] transition-colors disabled:opacity-50"
+                >
+                  {balanceLoading ? "Loading..." : "Refresh"}
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                {/* EVM 주소 */}
+                {evmAddress && (
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">
+                        EVM Address
+                      </p>
+                      <p className="text-xs font-mono text-gray-700 truncate max-w-[280px]">
+                        {evmAddress}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(evmAddress)}
+                      className="text-gray-300 hover:text-[#0037F0] transition-colors shrink-0 ml-2"
+                      title="Copy"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Solana 주소 */}
+                {solAddress && (
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">
+                        Solana Address
+                      </p>
+                      <p className="text-xs font-mono text-gray-700 truncate max-w-[280px]">
+                        {solAddress}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(solAddress)}
+                      className="text-gray-300 hover:text-[#0037F0] transition-colors shrink-0 ml-2"
+                      title="Copy"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {!evmAddress && !solAddress && (
+                  <p className="text-xs text-gray-400 text-center py-2">
+                    No embedded wallet found
+                  </p>
+                )}
+
+                {/* 잔액 그리드 */}
+                {(evmAddress || solAddress) && (
+                  <div className="grid grid-cols-3 gap-3 pt-2">
+                    <BalanceItem label="ETH (Mainnet)" value={balances.ethMainnet} symbol="ETH" loading={balanceLoading} />
+                    <BalanceItem label="ETH (Arbitrum)" value={balances.ethArbitrum} symbol="ETH" loading={balanceLoading} />
+                    <BalanceItem label="SOL" value={balances.sol} symbol="SOL" loading={balanceLoading} />
+                    <BalanceItem label="USDT (Eth)" value={balances.usdtEth} symbol="USDT" loading={balanceLoading} />
+                    <BalanceItem label="USDT (Arb)" value={balances.usdtArb} symbol="USDT" loading={balanceLoading} />
+                    <BalanceItem label="USDT (Sol)" value={balances.usdtSol} symbol="USDT" loading={balanceLoading} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* External Wallet 카드 */}
+            <div className="bg-white rounded-lg overflow-hidden shadow-glass border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200/50 bg-gray-50 flex justify-between items-center">
+                <h3 className="font-bold text-gray-900 text-sm">
+                  External Wallet
+                </h3>
+                <button
+                  onClick={() => linkWallet()}
+                  className="bg-black text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-gray-800 transition-colors"
+                >
+                  Connect Wallet
+                </button>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {externalWallets.length === 0 ? (
+                  <div className="px-6 py-8 text-center">
+                    <p className="text-xs text-gray-400">
+                      No external wallets connected
+                    </p>
+                  </div>
+                ) : (
+                  externalWallets.map((wallet: any) => (
+                    <div
+                      key={wallet.address}
+                      className="flex items-center justify-between px-6 py-4 hover:bg-white transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-sm">
+                          {wallet.chainType === "solana" ? "◎" : "⟠"}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-mono text-gray-700 truncate max-w-[200px]">
+                            {wallet.address}
+                          </p>
+                          <p className="text-[10px] text-gray-400 mt-0.5 capitalize">
+                            {wallet.walletClientType} · {wallet.chainType}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => unlinkWallet(wallet.address)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 bg-white transition-all"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -992,6 +1198,47 @@ function AccountRow({
       >
         {isConnected ? "Disconnect" : "Connect"}
       </button>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// BalanceItem (Wallet Balance Display)
+// ----------------------------------------------------------------------
+function BalanceItem({
+  label,
+  value,
+  symbol,
+  loading,
+}: {
+  label: string;
+  value: string;
+  symbol: string;
+  loading: boolean;
+}) {
+  const formatted = (() => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return "0";
+    if (num === 0) return "0";
+    if (num < 0.0001) return "<0.0001";
+    return num.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  })();
+
+  return (
+    <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+      <p className="text-[10px] text-gray-400 font-bold mb-1 truncate">
+        {label}
+      </p>
+      {loading ? (
+        <div className="h-5 bg-gray-200 rounded animate-pulse w-16" />
+      ) : (
+        <p className="text-sm font-bold text-gray-900 truncate">
+          {formatted}{" "}
+          <span className="text-[10px] text-gray-400 font-medium">
+            {symbol}
+          </span>
+        </p>
+      )}
     </div>
   );
 }

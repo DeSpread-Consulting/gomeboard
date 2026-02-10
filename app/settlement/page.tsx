@@ -14,8 +14,40 @@ import {
   PaperAirplaneIcon,
   MegaphoneIcon,
   DocumentArrowDownIcon,
+  BanknotesIcon,
+  CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 import jsPDF from "jspdf";
+import { useSendTransaction, useWallets as useEvmWallets } from "@privy-io/react-auth";
+import {
+  useSignAndSendTransaction,
+  useWallets,
+} from "@privy-io/react-auth/solana";
+import { createWalletClient, custom, parseUnits } from "viem";
+import { mainnet, arbitrum } from "viem/chains";
+import {
+  type PaymentNetwork,
+  USDT_ADDRESSES,
+  CHAIN_IDS,
+  EXPLORER_URLS,
+  NETWORK_LABELS,
+  getAvailableNetworks,
+  encodeERC20Transfer,
+  buildSolanaTransferTx,
+} from "@/utils/payment";
+
+// ERC-20 transfer ABI (for external wallet writeContract)
+const ERC20_TRANSFER_ABI = [
+  {
+    name: "transfer",
+    type: "function",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
 
 const supabase = createClient();
 
@@ -83,6 +115,12 @@ const tierPriority: Record<string, number> = {
 };
 
 export default function SettlementPage() {
+  // --- Privy Hooks ---
+  const { sendTransaction } = useSendTransaction();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { wallets: solanaWallets } = useWallets();
+  const { wallets: evmWallets } = useEvmWallets();
+
   const [activeTab, setActiveTab] = useState<
     "submit" | "dashboard" | "channels" | "request"
   >("dashboard");
@@ -125,7 +163,8 @@ export default function SettlementPage() {
     price_forward: 0,
     wallet_address: "",
     memo: "",
-    is_active: true, // [New] 기본값 true
+    is_active: true,
+    owner_username: "",
   });
 
   // --- 모달 상태 관리 ---
@@ -147,6 +186,18 @@ export default function SettlementPage() {
     price_forward: number;
     link_url: string; // [New] 링크 수정
   } | null>(null);
+
+  // --- 지급 모달 상태 ---
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [payTarget, setPayTarget] = useState<MonthlySummary | null>(null);
+  const [payNetwork, setPayNetwork] = useState<PaymentNetwork | null>(null);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payResult, setPayResult] = useState<{
+    success: boolean;
+    txHash: string;
+    network: PaymentNetwork;
+  } | null>(null);
+  const [payWalletSource, setPayWalletSource] = useState<"privy" | "external">("privy");
 
   useEffect(() => {
     fetchData();
@@ -413,7 +464,8 @@ export default function SettlementPage() {
         price_forward: 0,
         wallet_address: "",
         memo: "",
-        is_active: true, // 초기화
+        is_active: true,
+        owner_username: "",
       });
       fetchData();
     }
@@ -449,7 +501,8 @@ export default function SettlementPage() {
         price_forward: editingChannel.price_forward,
         wallet_address: editingChannel.wallet_address,
         memo: editingChannel.memo,
-        is_active: editingChannel.is_active, // [New] 상태 업데이트
+        is_active: editingChannel.is_active,
+        owner_username: editingChannel.owner_username || null,
       })
       .eq("id", editingChannel.id);
 
@@ -596,10 +649,10 @@ export default function SettlementPage() {
 
     const sendable = selected.filter((ch) => ch.owner_username);
     sendable.forEach((channel, idx) => {
-      // 팝업 차단 방지를 위해 약간의 딜레이
+      // 텔레그램 데스크탑 앱이 딥링크를 처리할 시간 확보 (1.5초 간격)
       setTimeout(() => {
         handleSendContentRequest(channel);
-      }, idx * 500);
+      }, idx * 1500);
     });
   };
 
@@ -670,6 +723,131 @@ ${links}`;
 
     // 새 창으로 열기 (팝업 차단 확인 필요할 수도 있음)
     window.open(url, "_blank");
+  };
+
+  // --- 정산 안내 일괄 전송 ---
+  const handleBulkSettlementDM = () => {
+    const sendable = summary.filter((item) => item.owner_username);
+    if (sendable.length === 0) {
+      alert("owner_username이 등록된 채널이 없습니다.");
+      return;
+    }
+
+    const noOwner = summary.filter((item) => !item.owner_username);
+    const month = selectedDate.getMonth() + 1;
+
+    if (noOwner.length > 0) {
+      const skip = noOwner.map((item) => item.channel_name).join(", ");
+      if (!confirm(`다음 채널은 소유주 미등록으로 전송이 제외됩니다:\n${skip}\n\n${sendable.length}개 채널에 전송하시겠습니까?`)) return;
+    } else {
+      if (!confirm(`${sendable.length}개 채널에 ${month}월 정산 안내를 일괄 전송하시겠습니까?`)) return;
+    }
+
+    sendable.forEach((item, idx) => {
+      setTimeout(() => {
+        handleSendDM(item);
+      }, idx * 1500);
+    });
+  };
+
+  // --- 지급 모달 핸들러 ---
+  // 외부 EVM 지갑 찾기
+  const externalEvmWallet = evmWallets.find(
+    (w) => w.walletClientType !== "privy" && w.walletClientType !== "privy-v2"
+  );
+
+  const openPayModal = (item: MonthlySummary) => {
+    const networks = getAvailableNetworks(item.wallet_address);
+    setPayTarget(item);
+    setPayNetwork(networks.length > 0 ? networks[0] : null);
+    setPayResult(null);
+    setPayLoading(false);
+    setPayWalletSource("privy");
+    setIsPayModalOpen(true);
+  };
+
+  const handlePayment = async () => {
+    if (!payTarget || !payNetwork) return;
+    setPayLoading(true);
+    setPayResult(null);
+
+    try {
+      if (payNetwork === "ethereum" || payNetwork === "arbitrum") {
+        const data = encodeERC20Transfer(
+          payTarget.wallet_address,
+          payTarget.total_amount
+        );
+
+        if (payWalletSource === "external" && externalEvmWallet) {
+          // --- External wallet: viem walletClient + writeContract ---
+          const chainId = CHAIN_IDS[payNetwork];
+          await externalEvmWallet.switchChain(chainId);
+          const provider = await externalEvmWallet.getEthereumProvider();
+          const walletClient = createWalletClient({
+            account: externalEvmWallet.address as `0x${string}`,
+            chain: payNetwork === "ethereum" ? mainnet : arbitrum,
+            transport: custom(provider),
+          });
+          const txHash = await walletClient.writeContract({
+            address: USDT_ADDRESSES[payNetwork] as `0x${string}`,
+            abi: ERC20_TRANSFER_ABI,
+            functionName: "transfer",
+            args: [
+              payTarget.wallet_address as `0x${string}`,
+              parseUnits(payTarget.total_amount.toString(), 6),
+            ],
+          });
+          setPayResult({
+            success: true,
+            txHash,
+            network: payNetwork,
+          });
+        } else {
+          // --- Privy embedded wallet (기존 로직) ---
+          const result = await sendTransaction({
+            to: USDT_ADDRESSES[payNetwork] as `0x${string}`,
+            data,
+            chainId: CHAIN_IDS[payNetwork],
+          });
+          setPayResult({
+            success: true,
+            txHash: result.hash,
+            network: payNetwork,
+          });
+        }
+        setToastMessage(`${NETWORK_LABELS[payNetwork]} USDT 전송 완료!`);
+        setTimeout(() => setToastMessage(null), 5000);
+      } else if (payNetwork === "solana") {
+        // Solana: SPL Token Transfer (항상 Privy 지갑)
+        const solanaWallet = solanaWallets[0];
+        if (!solanaWallet) {
+          throw new Error("Solana 지갑이 연결되지 않았습니다.");
+        }
+        const txBytes = await buildSolanaTransferTx(
+          solanaWallet.address,
+          payTarget.wallet_address,
+          payTarget.total_amount
+        );
+        const result = await signAndSendTransaction({
+          transaction: txBytes,
+          wallet: solanaWallet as any,
+          chain: "solana:mainnet",
+        });
+        // signature is Uint8Array, convert to base58 string
+        const sigHex = Buffer.from(result.signature).toString("hex");
+        setPayResult({
+          success: true,
+          txHash: sigHex,
+          network: payNetwork,
+        });
+        setToastMessage("Solana USDT 전송 완료!");
+        setTimeout(() => setToastMessage(null), 5000);
+      }
+    } catch (e: any) {
+      alert(`전송 실패: ${e.message || e}`);
+    } finally {
+      setPayLoading(false);
+    }
   };
 
   // --- PDF 생성 ---
@@ -880,15 +1058,26 @@ ${links}`;
               </button>
             ))}
           </div>
-          {activeTab === "channels" && (
-            <button
-              onClick={() => setIsPdfModalOpen(true)}
-              className="px-4 py-2.5 bg-white border border-gray-300 rounded-lg font-bold text-sm text-gray-700 hover:bg-gray-100 transition-colors shadow-sm flex items-center gap-1.5"
-            >
-              <DocumentArrowDownIcon className="w-4 h-4" />
-              공유 (PDF)
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {activeTab === "dashboard" && summary.length > 0 && (
+              <button
+                onClick={handleBulkSettlementDM}
+                className="px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold text-sm transition-colors shadow-sm flex items-center gap-1.5"
+              >
+                <PaperAirplaneIcon className="w-4 h-4" />
+                일괄 안내 전송
+              </button>
+            )}
+            {activeTab === "channels" && (
+              <button
+                onClick={() => setIsPdfModalOpen(true)}
+                className="px-4 py-2.5 bg-white border border-gray-300 rounded-lg font-bold text-sm text-gray-700 hover:bg-gray-100 transition-colors shadow-sm flex items-center gap-1.5"
+              >
+                <DocumentArrowDownIcon className="w-4 h-4" />
+                공유 (PDF)
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="transition-all duration-300">
@@ -980,6 +1169,24 @@ ${links}`;
                             >
                               <PaperAirplaneIcon className="w-3 h-3" />
                               전송
+                            </button>
+                            {/* USDT 지급 버튼 */}
+                            <button
+                              onClick={() => openPayModal(item)}
+                              className={`px-2 py-1 rounded text-xs font-bold transition-colors mb-1 flex items-center gap-1 ${
+                                getAvailableNetworks(item.wallet_address).length > 0
+                                  ? "text-white bg-purple-500 hover:bg-purple-600"
+                                  : "text-gray-400 bg-gray-200 cursor-not-allowed"
+                              }`}
+                              disabled={getAvailableNetworks(item.wallet_address).length === 0}
+                              title={
+                                getAvailableNetworks(item.wallet_address).length > 0
+                                  ? "USDT 지급"
+                                  : "지갑 주소 미등록 또는 형식 오류"
+                              }
+                            >
+                              <CurrencyDollarIcon className="w-3 h-3" />
+                              지급
                             </button>
                             <button
                               onClick={() =>
@@ -1594,7 +1801,7 @@ ${links}`;
                       }
                     />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <label className="block text-xs font-bold text-gray-500 mb-1">
                       지갑주소
                     </label>
@@ -1606,6 +1813,22 @@ ${links}`;
                         setNewChannel({
                           ...newChannel,
                           wallet_address: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-gray-500 mb-1">
+                      소유주 (@username)
+                    </label>
+                    <input
+                      className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
+                      placeholder="@username"
+                      value={newChannel.owner_username || ""}
+                      onChange={(e) =>
+                        setNewChannel({
+                          ...newChannel,
+                          owner_username: e.target.value,
                         })
                       }
                     />
@@ -1755,6 +1978,22 @@ ${links}`;
                     setEditingChannel({
                       ...editingChannel,
                       wallet_address: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-bold text-gray-500 mb-1">
+                  소유주 (@username)
+                </label>
+                <input
+                  className="w-full p-2 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0037F0]/30 outline-none border"
+                  placeholder="@username"
+                  value={editingChannel.owner_username || ""}
+                  onChange={(e) =>
+                    setEditingChannel({
+                      ...editingChannel,
+                      owner_username: e.target.value,
                     })
                   }
                 />
@@ -1939,6 +2178,171 @@ ${links}`;
                 {pdfLoading ? "생성 중..." : "PDF 다운로드"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- USDT 지급 모달 --- */}
+      {isPayModalOpen && payTarget && (
+        <div className="fixed inset-0 glass-modal-backdrop flex items-center justify-center z-50">
+          <div className="glass-modal w-full max-w-md p-6">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <BanknotesIcon className="w-5 h-5" />
+              USDT 지급
+            </h2>
+
+            {/* KOL 정보 */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">채널</span>
+                <span className="font-bold text-gray-900">{payTarget.channel_name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">지갑 주소</span>
+                <span className="font-mono text-xs text-gray-700 max-w-[200px] truncate" title={payTarget.wallet_address}>
+                  {payTarget.wallet_address}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">지급 금액</span>
+                <span className="font-bold text-blue-600 text-lg">
+                  ${payTarget.total_amount.toLocaleString()} USDT
+                </span>
+              </div>
+            </div>
+
+            {/* 지갑 선택 + 네트워크 선택 */}
+            {!payResult && (
+              <>
+                {/* 지갑 선택 (EVM 네트워크일 때만) */}
+                {payTarget && getAvailableNetworks(payTarget.wallet_address).some(n => n === "ethereum" || n === "arbitrum") && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      지갑 선택
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setPayWalletSource("privy")}
+                        className={`px-3 py-2.5 rounded-lg text-sm font-bold border-2 transition-all ${
+                          payWalletSource === "privy"
+                            ? "border-purple-500 bg-purple-50 text-purple-700"
+                            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        Privy 지갑
+                      </button>
+                      <button
+                        onClick={() => externalEvmWallet && setPayWalletSource("external")}
+                        disabled={!externalEvmWallet}
+                        className={`px-3 py-2.5 rounded-lg text-sm font-bold border-2 transition-all ${
+                          payWalletSource === "external"
+                            ? "border-purple-500 bg-purple-50 text-purple-700"
+                            : !externalEvmWallet
+                              ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed"
+                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                        }`}
+                        title={!externalEvmWallet ? "마이페이지에서 외부 지갑을 먼저 연결하세요" : "외부 지갑으로 전송"}
+                      >
+                        개인 지갑
+                        {!externalEvmWallet && (
+                          <span className="block text-[10px] mt-0.5 text-gray-400">미연결</span>
+                        )}
+                      </button>
+                    </div>
+                    {payWalletSource === "external" && externalEvmWallet && (
+                      <p className="text-[10px] text-gray-500 mt-1.5 font-mono truncate">
+                        {externalEvmWallet.address}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="mb-4">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    네트워크 선택
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["ethereum", "arbitrum", "solana"] as PaymentNetwork[]).map((net) => {
+                      const available = getAvailableNetworks(payTarget.wallet_address);
+                      const isAvailable = available.includes(net);
+                      const isSelected = payNetwork === net;
+                      return (
+                        <button
+                          key={net}
+                          onClick={() => isAvailable && setPayNetwork(net)}
+                          disabled={!isAvailable}
+                          className={`px-3 py-2.5 rounded-lg text-sm font-bold border-2 transition-all ${
+                            isSelected
+                              ? "border-purple-500 bg-purple-50 text-purple-700"
+                              : isAvailable
+                                ? "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                                : "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed"
+                          }`}
+                          title={
+                            !isAvailable
+                              ? payTarget.wallet_address.startsWith("0x")
+                                ? "EVM 주소는 Solana에서 사용 불가"
+                                : "Solana 주소는 EVM에서 사용 불가"
+                              : NETWORK_LABELS[net]
+                          }
+                        >
+                          {NETWORK_LABELS[net]}
+                          {!isAvailable && (
+                            <span className="block text-[10px] mt-0.5 text-gray-400">호환 불가</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => { setIsPayModalOpen(false); setPayTarget(null); }}
+                    className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded"
+                    disabled={payLoading}
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handlePayment}
+                    disabled={!payNetwork || payLoading}
+                    className={`px-4 py-2 text-sm font-bold text-white rounded flex items-center gap-1.5 ${
+                      !payNetwork || payLoading
+                        ? "bg-gray-300 cursor-not-allowed"
+                        : "bg-purple-600 hover:bg-purple-700"
+                    }`}
+                  >
+                    <CurrencyDollarIcon className="w-4 h-4" />
+                    {payLoading ? "전송 중..." : `${payNetwork ? NETWORK_LABELS[payNetwork] : ""} 전송`}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* 전송 결과 */}
+            {payResult && (
+              <div className="space-y-3">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <p className="text-green-700 font-bold mb-1">전송 완료!</p>
+                  <p className="text-xs text-gray-500 break-all font-mono">{payResult.txHash}</p>
+                </div>
+                <a
+                  href={`${EXPLORER_URLS[payResult.network]}${payResult.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full text-center px-4 py-2 text-sm font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Explorer에서 확인
+                </a>
+                <button
+                  onClick={() => { setIsPayModalOpen(false); setPayTarget(null); setPayResult(null); }}
+                  className="w-full px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded"
+                >
+                  닫기
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

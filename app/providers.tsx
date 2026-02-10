@@ -20,12 +20,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           ethereum: {
             createOnLogin: "users-without-wallets",
           },
-          // 만약 솔라나 지갑도 필요하다면 아래 주석 해제
-          /*
           solana: {
             createOnLogin: "users-without-wallets",
           },
-          */
         },
       }}
     >
