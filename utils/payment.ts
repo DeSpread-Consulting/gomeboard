@@ -59,7 +59,7 @@ const TOKEN_PROGRAM_ID = new PublicKey(
 
 // --- Address Validation ---
 export function isEvmAddress(addr: string): boolean {
-  return addr.startsWith("0x") && addr.length === 42;
+  return /^0x[0-9a-fA-F]{40}$/.test(addr);
 }
 
 export function isSolanaAddress(addr: string): boolean {
