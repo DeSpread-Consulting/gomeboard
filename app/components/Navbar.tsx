@@ -26,7 +26,6 @@ export default function Navbar() {
   // 메뉴 리스트 구조 변경 (children 속성 추가)
   const navLinks = [
     { name: "Overview", path: "/", allowed: ["internal"] },
-    { name: "Crypto", path: "/crypto-dashboard", allowed: ["internal"] },
     { name: "Projects", path: "/projects", allowed: ["internal"] },
     { name: "Reports", path: "/reports", allowed: ["internal"] },
     {
@@ -46,9 +45,10 @@ export default function Navbar() {
         },
       ],
     },
-    { name: "KOL", path: "/kol", allowed: ["internal"] },
     { name: "K-Insights", path: "/korea-insights", allowed: ["internal"] },
-    { name: "Settle", path: "/settlement", allowed: ["internal"] },
+    { name: "Oracle", path: "/oracle", allowed: ["internal"] },
+    { name: "KOL tier", path: "/kol", allowed: ["internal"] },
+    { name: "KOL Settle", path: "/settlement", allowed: ["internal"] },
   ];
 
   const visibleLinks = navLinks.filter((link) => link.allowed.includes(role));
