@@ -164,7 +164,8 @@ KOL_DB_PASSWORD=ca64ddwg6JToV6KJLMmm
 | `channels` | 1,433 | channel_id(bigint), username, title, category, is_monitored, memo, is_channel(bool), manual_tier, subscriber_count | KOL 채널 + 그룹챗 |
 | `channel_metrics` | 602K | channel_id, participants_count, median_views, median_forwards, stats_date | 일간 채널 통계 |
 | `channel_participants` | 1.5M | channel_id, count, created_at | 구독자 수 히스토리 |
-| `messages` | 파티션 | channel_id, message_id, text, date, views, forwards | **월별 파티션**: `messages_y2024m01` ~ `_y2026m12` |
+| `messages` | 파티션 | **chat_id**(bigint), message_id, content(text), message_timestamp, views_count, forwards_count, fwd_peer_id, fwd_peer_type(enum), fwd_message_id, fwd_date, sender_id(jsonb), entities(jsonb), reactions(jsonb), is_channel_msg(bool), topic_id, fwd(jsonb), quote(jsonb), content_tsv(tsvector) | **월별 파티션**: `messages_y2024m01` ~ `_y2026m12`. ⚠️ `chat_id`임 (`channel_id` 아님!) |
+| `channel_discussion_mapping` | 956 | channel_id(bigint=방송채널), groupchat_id(bigint=연결 채팅방), created_at, updated_at | 채널↔토론방 매핑. 자동 포워딩 필터에 사용 |
 | `daily_keyword_stats` | 189K | **ticker**(text), **keyword**(text), mention_count, **stats_date**(date) | 전체 채널 집계 (channel_id 없음!) |
 | `hourly_keyword_stats` | 2.9M | ticker, keyword, mention_count, **hour_bucket**(timestamptz) | 전체 채널 집계 (channel_id 없음!) |
 | `daily_channel_keyword_stats` | 854K | **channel_id**, project_id, keyword, mention_count, stats_date | 채널별 일간 |
@@ -288,19 +289,25 @@ Gemini(gemini-3-flash-preview)에게 전체 DB 스키마를 제공하고 페이�
 ```
 app/korea-insights/
 ├── page.tsx                          # 서버 페이지 (ISR 300초)
-├── actions.ts                        # 서버 액션 5개
+├── actions.ts                        # 서버 액션 8개
 │   ├── fetchPulseWidgets()           # 상단 펄스 위젯 4개
 │   ├── fetchShillIndex()             # Shill-to-Volume 버블차트
 │   ├── fetchNarrativeQuality()       # 내러티브 품질 리더보드
 │   ├── fetchMediaDivergence(keyword) # 미디어 vs 소셜 (키워드 변경 가능)
-│   └── fetchAlphaLeak()              # Alpha Leak 타임라인
+│   ├── fetchAlphaLeak()              # Alpha Leak 타임라인
+│   ├── fetchHiddenOrigin()           # 포워딩 발원지 (자동포워딩 제외)
+│   ├── fetchRetailIntent(keyword)    # 네이버 검색 의도 분석 (키워드 변경 가능)
+│   └── fetchSEOBattlefield()         # Google/Naver 미디어 점유율
 └── components/
     ├── KoreaInsightsClient.tsx       # 메인 클라이언트 래퍼 (새로고침 기능)
     ├── PulseWidgets.tsx              # BTC멘션, 트렌딩스코어, 네이버검색, 거래량
     ├── ShillToVolumeBubble.tsx       # Recharts ScatterChart (X:거래량, Y:멘션, Z:사이즈)
     ├── NarrativeQualityBoard.tsx     # Stacked BarChart + 상세 테이블
     ├── MediaSocialDivergence.tsx     # ComposedChart (Bar+Line 듀얼축) + 인사이트 박스
-    └── AlphaLeakTimeline.tsx         # 커스텀 수평 바 타임라인
+    ├── AlphaLeakTimeline.tsx         # 커스텀 수평 바 타임라인
+    ├── HiddenOriginChart.tsx         # Recharts Vertical BarChart (티어별 색상)
+    ├── RetailIntentSpectrum.tsx      # Recharts Vertical BarChart + 키워드 전환
+    └── SEOBattlefield.tsx            # Recharts PieChart 도넛 x2 (Google + Naver)
 ```
 
 ### 데이터 플로우
@@ -313,13 +320,47 @@ KOL DB (PostgreSQL 직접 연결 via pg Pool)
   ├─ telegram.daily_keyword_stats + CMC + storyteller grades → ShillToVolumeBubble
   ├─ telegram.projects + project_keywords + storyteller grades/scores → NarrativeQualityBoard
   ├─ search_analytics.google_news_results + telegram.daily_keyword_stats → MediaSocialDivergence
-  └─ telegram.hourly_channel_keyword_stats + channels + kol.nodes → AlphaLeakTimeline
+  ├─ telegram.hourly_channel_keyword_stats + channels + kol.nodes → AlphaLeakTimeline
+  ├─ telegram.messages(chat_id, fwd_peer_id) + channel_discussion_mapping + channels + kol.nodes → HiddenOriginChart
+  ├─ search_analytics.monthly_naver_related_keywords + keywords → RetailIntentSpectrum
+  └─ search_analytics.google_domain_distribution + news_scraper.naver_news_articles → SEOBattlefield
 ```
+
+### 레이아웃
+```
+Row 1: Pulse Widgets (4개 KPI 박스)
+Row 2: Shill-to-Volume (60%) + Narrative Quality (40%)    — grid-cols-5
+Row 3: Media vs Social (50%) + Alpha Leak (50%)           — grid-cols-2
+Row 4: Hidden Origin (50%) + Retail Intent (50%)          — grid-cols-2 (NEW)
+Row 5: SEO Battlefield (100%)                             — full-width (NEW)
+```
+
+### 신규 3개 섹션 (2026-02-12 추가)
+
+#### Hidden Origin — 포워딩 발원지 분석
+- **질문**: "구독자 수가 아니라, 누구의 글이 가장 많이 퍼 날라지는가?"
+- **데이터**: `telegram.messages` (fwd_peer_id, chat_id) + `channel_discussion_mapping` (자동포워딩 제외) + `channels` + `kol.nodes`
+- **시각화**: Recharts BarChart (layout="vertical"), 티어별 색상 (A+=빨강, A=주황, B=노랑, C=파랑, D=회색)
+- **핵심 로직**: `NOT EXISTS (channel_discussion_mapping WHERE cdm.channel_id = fwd_peer_id AND cdm.groupchat_id = chat_id)` — 채널→연결 채팅방 자동포워딩 제외
+- **Unknown 방지**: `JOIN telegram.channels` (LEFT JOIN 대신 INNER JOIN)
+
+#### Retail Intent Spectrum — 검색 의도 분석
+- **질문**: "한국 개미는 투기를 원하나, 기술을 원하나, 온보딩을 원하나?"
+- **데이터**: `search_analytics.monthly_naver_related_keywords` + `keywords`
+- **시각화**: Recharts BarChart (layout="vertical"), 의도별 색상 (Investment=파랑, Onboarding=초록, Technology=보라, General=회색)
+- **키워드 전환**: 비트코인/이더리움/솔라나/리플 (서버 액션 재호출)
+- **의도 분류**: SQL CASE문 정규식 — '시세|가격|차트' → Investment, '하는법|가입|지갑' → Onboarding, 'ETF|스테이킹' → Technology
+
+#### SEO Battlefield — 미디어 점유율
+- **질문**: "PR 기사를 냈을 때 실제로 노출되는 곳은 어디인가?"
+- **데이터**: `search_analytics.google_domain_distribution` + `news_scraper.naver_news_articles`
+- **시각화**: Recharts PieChart 도넛 2개 나란히 (Google 도메인 점유율 + Naver 뉴스 제공자)
+- **Recharts v3 주의**: PieChart data prop에 typed interface 직접 사용 불가 → `Record<string, unknown>[]`로 변환 필요
 
 ### 캐싱 전략
 - 페이지 ISR: 300초 (5분)
 - 클라이언트 새로고침 버튼으로 수동 갱신 가능
-- MediaSocialDivergence는 키워드 변경 시 서버 액션 재호출
+- MediaSocialDivergence, RetailIntentSpectrum은 키워드 변경 시 서버 액션 재호출
 
 ---
 
@@ -343,4 +384,8 @@ KOL DB (PostgreSQL 직접 연결 via pg Pool)
 - CMC 데이터 35M+ 행 — 반드시 파티션 테이블 지정 (`getCmcPartitionTable()`) 후 쿼리, 전체 테이블 스캔 금지
 - `daily_keyword_stats` / `hourly_keyword_stats`에는 **channel_id가 없음** — 채널별 분석은 `_channel_` 버전 사용
 - 네이버 검색 데이터는 **월간만** 제공 — 일간 트렌드는 구글 뉴스로 대체
+- `telegram.messages` 파티션 테이블의 채널 컬럼은 **`chat_id`** (NOT `channel_id`) — 실제 DB 검증 완료
+- `telegram.channel_discussion_mapping` (956행): 채널→연결 채팅방 매핑. 포워딩 분석 시 자동포워딩 제외 필수
+- **전체 DB 컬럼 레퍼런스**: `DB_SCHEMA.md` 참고 (information_schema에서 덤프)
+- Recharts v3: PieChart data에 typed interface 직접 불가 → `Record<string, unknown>[]`로 변환
 - Gemini CLI 모델: `gemini-3-flash-preview` 사용 (2.5-pro, 2.5-flash 등은 429 에러 빈발)

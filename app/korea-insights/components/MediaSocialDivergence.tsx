@@ -67,7 +67,7 @@ export default function MediaSocialDivergence({
         <div>
           <h3 className="text-lg font-bold text-gray-900">미디어 vs 소셜</h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            구글 뉴스 기사 수 vs 텔레그램 멘션 (30일)
+            구글 뉴스 기사 수 vs 텔레그램 멘션 · 최근 30일 · {new Date().toLocaleDateString("ko-KR")} 기준
           </p>
         </div>
         <div className="flex items-center gap-1">

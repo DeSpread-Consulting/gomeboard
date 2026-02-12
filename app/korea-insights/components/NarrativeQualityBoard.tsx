@@ -45,7 +45,7 @@ export default function NarrativeQualityBoard({
       <div className="mb-3">
         <h3 className="text-lg font-bold text-gray-900">내러티브 품질 리더보드</h3>
         <p className="text-xs text-gray-500 mt-0.5">
-          트렌딩 프로젝트 Storyteller 등급 분포 (7일)
+          트렌딩 프로젝트 Storyteller 등급 분포 · 최근 7일 · {new Date().toLocaleDateString("ko-KR")} 기준
         </p>
       </div>
 

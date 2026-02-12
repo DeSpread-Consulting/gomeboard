@@ -11,7 +11,7 @@
 
 ---
 
-## 페이지 구조 (4개 섹션 + 상단 펄스 위젯)
+## 페이지 구조 (7개 섹션 + 상단 펄스 위젯)
 
 ### 상단: Pulse Widgets (한눈에 보는 핵심 지표 4개)
 | Widget | 데이터 소스 | 설명 |
@@ -266,6 +266,143 @@ ORDER BY t.total_mentions_7d DESC, g.grade ASC;
 
 ---
 
+### Section 5: Hidden Origin — 포워딩 발원지 분석 (2026-02-12 추가)
+**"구독자 수가 아니라, 누구의 글이 가장 많이 퍼 날라지는가?"**
+
+#### 시각화: Recharts Vertical BarChart
+- Y축: 채널명 (상위 15개)
+- X축: 포워딩 횟수
+- 바 색상: 채널 티어별 (A+=빨강, A=주황, B=노랑, C=파랑, D=회색)
+- 툴팁: 채널명, @username, 티어, 포워딩 횟수, 생성 조회수
+
+#### SQL 로직
+```sql
+-- 자동 포워딩 제외가 핵심!
+-- telegram.channel_discussion_mapping으로 채널→연결 채팅방 자동포워딩 필터
+WITH forwarding_sources AS (
+  SELECT
+    m.fwd_peer_id,
+    COUNT(*) as forward_count,
+    SUM(m.views_count) as total_views_generated
+  FROM (
+    SELECT fwd_peer_id, views_count, chat_id  -- ⚠️ chat_id (NOT channel_id)
+    FROM telegram."messages_y2026m02"
+    WHERE fwd_peer_id IS NOT NULL
+      AND fwd_peer_type = 'channel'
+      AND message_timestamp > NOW() - INTERVAL '30 days'
+    UNION ALL
+    SELECT fwd_peer_id, views_count, chat_id
+    FROM telegram."messages_y2026m01"
+    WHERE fwd_peer_id IS NOT NULL
+      AND fwd_peer_type = 'channel'
+      AND message_timestamp > NOW() - INTERVAL '30 days'
+  ) m
+  WHERE NOT EXISTS (
+    SELECT 1 FROM telegram.channel_discussion_mapping cdm
+    WHERE cdm.channel_id = m.fwd_peer_id    -- 방송 채널 = 포워딩 원본
+      AND cdm.groupchat_id = m.chat_id       -- 연결 채팅방 = 메시지 수신처
+  )
+  GROUP BY m.fwd_peer_id
+  ORDER BY forward_count DESC
+  LIMIT 15
+)
+SELECT
+  tc.title as channel_title,
+  tc.username,
+  COALESCE(tc.manual_tier, kn.calculated_tier) as tier,
+  fs.forward_count,
+  fs.total_views_generated
+FROM forwarding_sources fs
+JOIN telegram.channels tc ON fs.fwd_peer_id = tc.channel_id  -- INNER JOIN으로 Unknown 제거
+LEFT JOIN kol.nodes kn ON fs.fwd_peer_id = kn.channel_id
+ORDER BY fs.forward_count DESC
+```
+
+#### 인사이트
+- **자동 포워딩 vs 진짜 포워딩**: 텔레그램은 채널 포스트를 연결 채팅방으로 자동 복사. `channel_discussion_mapping`으로 이 노이즈 제거
+- **Unknown 채널**: `fwd_peer_id`가 `channels` 테이블에 없으면 미등록 채널. INNER JOIN으로 제외
+- **킬러 인사이트**: 구독자 5만 B급 채널보다, 500회 인용된 A+ 채널과 AMA를 잡는 게 비용 효율적
+
+---
+
+### Section 6: Retail Intent Spectrum — 검색 의도 분석 (2026-02-12 추가)
+**"한국 개미는 투기를 원하나, 기술을 원하나, 온보딩을 원하나?"**
+
+#### 시각화: Recharts Vertical BarChart + 키워드 전환 버튼
+- Y축: 연관 키워드 (상위 20개)
+- X축: 검색량
+- 바 색상: 의도 카테고리별 (Investment=파랑, Onboarding=초록, Technology=보라, General=회색)
+- 키워드 전환 버튼: 비트코인/이더리움/솔라나/리플 (MediaSocialDivergence와 동일 패턴)
+
+#### SQL 로직
+```sql
+SELECT
+  nrk.related_keyword,
+  nrk.search_volume,
+  CASE
+    WHEN nrk.related_keyword ~ '시세|가격|차트|전망|호재|하락|상승' THEN 'Investment'
+    WHEN nrk.related_keyword ~ '하는법|가입|지갑|계좌|거래소|출금|입금|매수' THEN 'Onboarding'
+    WHEN nrk.related_keyword ~ 'ETF|스테이킹|디파이|반감기|백서' THEN 'Technology'
+    ELSE 'General'
+  END as intent_category
+FROM search_analytics.monthly_naver_related_keywords nrk
+JOIN search_analytics.keywords k ON nrk.keyword_id = k.id
+WHERE k.keyword = $1  -- 파라미터: 비트코인/이더리움/솔라나/리플
+  AND nrk.year_month = (SELECT MAX(year_month) FROM search_analytics.monthly_naver_related_keywords)
+ORDER BY nrk.search_volume DESC
+LIMIT 20
+```
+
+#### 인사이트
+- **Investment 지배적**: '시세/가격' 검색 → 대중 타겟 마케팅 효과적
+- **Onboarding 지배적**: '가입/지갑' 검색 → 온보딩 가이드 콘텐츠 집중
+- **Technology 지배적**: 'ETF/스테이킹' 검색 → 전문가 타겟 전략 전환
+
+---
+
+### Section 7: SEO Battlefield — 미디어 점유율 (2026-02-12 추가)
+**"PR 기사를 냈을 때 실제로 노출되는 곳은 어디인가?"**
+
+#### 시각화: Recharts PieChart (도넛) x2 나란히
+- 좌측: Google 검색 도메인 점유율 (AVG percentage, 30일)
+- 우측: Naver 뉴스 제공자 점유율 (기사 수, 30일)
+- 각 도넛 중앙에 라벨 ("Google" / "Naver")
+
+#### SQL 로직
+```sql
+-- Google 도메인 점유율
+SELECT
+  gdd.domain,
+  ROUND(AVG(gdd.percentage)::numeric, 1) as avg_share,
+  SUM(gdd.count) as total_appearances
+FROM search_analytics.google_domain_distribution gdd
+WHERE gdd.collection_timestamp > NOW() - INTERVAL '30 days'
+GROUP BY gdd.domain
+ORDER BY total_appearances DESC
+LIMIT 10;
+
+-- Naver 뉴스 제공자 점유율
+SELECT
+  provider,
+  COUNT(*) as article_count,
+  ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) as share_pct
+FROM news_scraper.naver_news_articles
+WHERE published_at > NOW() - INTERVAL '30 days'
+GROUP BY provider
+ORDER BY article_count DESC
+LIMIT 10;
+```
+
+#### 인사이트
+- **킬러 인사이트**: bloomingbit.io가 coindesk보다 한국 검색 점유율이 높을 수 있음
+- **액션**: 글로벌 미디어 한국어판 $20K 대신, 실제 점유율 상위 매체에 예산 배분
+
+#### 기술 주의사항 (Recharts v3)
+- PieChart `data` prop에 TypeScript interface(`SEOItem`) 직접 사용 시 index signature 오류
+- 해결: `toChartData()` 헬퍼로 `Record<string, unknown>[]`로 변환 후 전달
+
+---
+
 ## 데이터 플로우 다이어그램
 
 ```
@@ -285,23 +422,30 @@ ORDER BY t.total_mentions_7d DESC, g.grade ASC;
 │             │projects      │            │               │
 │             │project_      │            │               │
 │             │ keywords     │            │               │
+│             │channel_      │            │               │
+│             │ discussion_  │            │               │
+│             │ mapping      │            │               │
 ├─────────────┴──────────────┴────────────┴───────────────┤
 │                                                         │
 │  storyteller.storyteller_message_grades (품질 등급)       │
 │  storyteller.storyteller_leaderboard_scores (리더보드)    │
 │  kol.nodes (채널 티어) + kol.edges (관계)                │
+│  news_scraper.naver_news_articles (뉴스 기사)            │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────┐
-│              Server Actions (actions.ts)                 │
+│              Server Actions (actions.ts) — 8개           │
 ├─────────────────────────────────────────────────────────┤
-│ fetchShillIndex()       → Section 1 Bubble Chart        │
-│ fetchAlphaLeak()        → Section 2 Timeline            │
-│ fetchMediaDivergence()  → Section 3 Dual-Axis Chart     │
-│ fetchNarrativeQuality() → Section 4 Stacked Bar + Table │
-│ fetchPulseWidgets()     → Top Pulse Widgets             │
+│ fetchPulseWidgets()       → Top Pulse Widgets           │
+│ fetchShillIndex()         → Section 1 Bubble Chart      │
+│ fetchNarrativeQuality()   → Section 2 Quality Board     │
+│ fetchMediaDivergence()    → Section 3 Dual-Axis Chart   │
+│ fetchAlphaLeak()          → Section 4 Timeline          │
+│ fetchHiddenOrigin()       → Section 5 Fwd Origin Bar    │
+│ fetchRetailIntent(kw)     → Section 6 Intent Bar        │
+│ fetchSEOBattlefield()     → Section 7 Donut x2         │
 └─────────────────────────────────────────────────────────┘
                         │
                         ▼
@@ -309,18 +453,24 @@ ORDER BY t.total_mentions_7d DESC, g.grade ASC;
 │              Korea Insights Page                        │
 ├─────────────────────────────────────────────────────────┤
 │ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                   │
-│ │Pulse1│ │Pulse2│ │Pulse3│ │Pulse4│  ← 상단 위젯      │
+│ │Pulse1│ │Pulse2│ │Pulse3│ │Pulse4│  ← Row 1          │
 │ └──────┘ └──────┘ └──────┘ └──────┘                   │
 │ ┌────────────────────┐┌────────────────┐               │
-│ │ Shill-to-Volume    ││ Narrative      │               │
-│ │ Bubble Chart       ││ Quality Board  │               │
-│ │ (60%)              ││ (40%)          │               │
+│ │ Shill-to-Volume    ││ Narrative      │  ← Row 2      │
+│ │ (60%)              ││ Quality (40%)  │               │
 │ └────────────────────┘└────────────────┘               │
 │ ┌────────────────────┐┌────────────────┐               │
-│ │ Alpha Leak         ││ Media vs       │               │
-│ │ Timeline           ││ Social Chart   │               │
-│ │ (50%)              ││ (50%)          │               │
+│ │ Media vs Social    ││ Alpha Leak     │  ← Row 3      │
+│ │ (50%)              ││ Timeline (50%) │               │
 │ └────────────────────┘└────────────────┘               │
+│ ┌────────────────────┐┌────────────────┐               │
+│ │ Hidden Origin      ││ Retail Intent  │  ← Row 4 NEW  │
+│ │ (50%)              ││ Spectrum (50%) │               │
+│ └────────────────────┘└────────────────┘               │
+│ ┌──────────────────────────────────────┐               │
+│ │ SEO Battlefield (100%)              │  ← Row 5 NEW  │
+│ │ Google Donut │ Naver Donut          │               │
+│ └──────────────────────────────────────┘               │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -365,11 +515,23 @@ export async function getKolDbClient() {
 
 ---
 
-## 구현 우선순위
+## 구현 이력
 
-| 순위 | 섹션 | 이유 |
+| 순위 | 섹션 | 이유 | 상태 |
+|------|------|------|------|
+| 1 | Pulse Widgets + Shill-to-Volume | 가장 직관적이고 임팩트 큼, 기존 데이터로 즉시 구현 가능 | ✅ 완료 |
+| 2 | Narrative Quality Board | storyteller 데이터가 풍부하고 JOIN이 단순 | ✅ 완료 |
+| 3 | Media vs Social Divergence | 구글 뉴스 + 텔레그램 비교는 유니크한 인사이트 | ✅ 완료 |
+| 4 | Alpha Leak Timeline | 가장 복잡하지만 DeSpread만의 차별화 포인트 | ✅ 완료 |
+| 5 | Hidden Origin (포워딩 발원지) | Go-to-Market 전략: 루트 채널 식별 | ✅ 완료 (2026-02-12) |
+| 6 | Retail Intent Spectrum (검색 의도) | 리테일 심리 분석으로 타겟 전략 수립 | ✅ 완료 (2026-02-12) |
+| 7 | SEO Battlefield (미디어 점유율) | PR 예산 최적화를 위한 미디어 점유율 | ✅ 완료 (2026-02-12) |
+
+## 기술 이슈 & 해결
+
+| 이슈 | 원인 | 해결 |
 |------|------|------|
-| 1 | Pulse Widgets + Shill-to-Volume | 가장 직관적이고 임팩트 큼, 기존 데이터로 즉시 구현 가능 |
-| 2 | Narrative Quality Board | storyteller 데이터가 풍부하고 JOIN이 단순 |
-| 3 | Media vs Social Divergence | 구글 뉴스 + 텔레그램 비교는 유니크한 인사이트 |
-| 4 | Alpha Leak Timeline | 가장 복잡하지만 DeSpread만의 차별화 포인트 |
+| Hidden Origin 포워딩 횟수 과다 | 텔레그램 자동포워딩 (채널→연결 채팅방) 포함 | `channel_discussion_mapping` NOT EXISTS 필터 |
+| Hidden Origin #1 Unknown | `fwd_peer_id`가 `channels` 테이블에 미등록 | LEFT JOIN → INNER JOIN 변경 |
+| `messages` 테이블 `channel_id` 오류 | 실제 컬럼명은 `chat_id` | 실제 DB information_schema 검증 후 수정 |
+| Recharts v3 PieChart 타입 오류 | typed interface에 index signature 없음 | `Record<string, unknown>[]`로 변환 |
