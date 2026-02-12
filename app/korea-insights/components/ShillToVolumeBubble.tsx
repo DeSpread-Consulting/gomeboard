@@ -92,7 +92,7 @@ export default function ShillToVolumeBubble({
         <div>
           <h3 className="text-lg font-bold text-gray-900">Shill-to-Volume</h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            텔레그램 멘션 vs 한국 거래소 거래량 (버블 크기 = 멘션 수)
+            텔레그램 멘션 vs 한국 거래소 거래량 · 최근 24시간 기준 · {new Date().toLocaleDateString("ko-KR")}
           </p>
         </div>
         <div className="flex items-center gap-3 text-[10px]">
@@ -110,7 +110,7 @@ export default function ShillToVolumeBubble({
 
       <div className="h-[400px]">
         <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
+          <ScatterChart margin={{ top: 30, right: 40, bottom: 20, left: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
               dataKey="volumeUsd"
@@ -126,6 +126,7 @@ export default function ShillToVolumeBubble({
               dataKey="mentions"
               name="멘션"
               type="number"
+              domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
               tick={{ fontSize: 11, fill: "#94a3b8" }}
               label={{ value: "텔레그램 멘션", angle: -90, position: "insideLeft", offset: 10, fontSize: 11, fill: "#94a3b8" }}
             />

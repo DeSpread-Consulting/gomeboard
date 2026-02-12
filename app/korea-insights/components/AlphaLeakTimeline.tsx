@@ -49,7 +49,7 @@ export default function AlphaLeakTimeline({
       <div className="mb-4">
         <h3 className="text-lg font-bold text-gray-900">Alpha Leak 타임라인</h3>
         <p className="text-xs text-gray-500 mt-0.5">
-          A/A+ 채널에서 C/D 채널로 정보가 전파되는 시간 (48시간 기준)
+          A/A+ → C/D 채널 정보 전파 시간 · 최근 48시간 · {new Date().toLocaleDateString("ko-KR")} 기준
         </p>
       </div>
 
@@ -61,8 +61,8 @@ export default function AlphaLeakTimeline({
 
           return (
             <div key={item.keyword} className="group relative flex items-center gap-3">
-              <span className="text-sm font-bold text-gray-900 w-20 truncate shrink-0">
-                {item.keyword}
+              <span className="text-sm font-bold text-gray-900 w-20 truncate shrink-0" title={item.keyword}>
+                {item.ticker || item.keyword}
               </span>
               <div className="relative flex-1">
                 <div className="h-7 bg-gray-50 rounded-lg relative overflow-hidden cursor-default">

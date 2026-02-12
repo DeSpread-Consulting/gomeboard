@@ -42,11 +42,32 @@ export interface MediaDivergencePoint {
 
 export interface AlphaLeakItem {
   keyword: string;
+  ticker: string | null;
   alphaFirstSeen: string;
   retailFirstSeen: string;
   lagHours: number;
   alphaMentions: number;
   retailMentions: number;
+}
+
+export interface HiddenOriginItem {
+  channelTitle: string;
+  username: string | null;
+  tier: string | null;
+  forwardCount: number;
+  totalViewsGenerated: number;
+}
+
+export interface RetailIntentItem {
+  relatedKeyword: string;
+  searchVolume: number;
+  intentCategory: "Investment" | "Onboarding" | "Technology" | "General";
+}
+
+export interface SEOItem {
+  domain: string;
+  metric: number;
+  platform: "Google" | "Naver";
 }
 
 // ─── Pulse Widgets ───────────────────────────────────────
@@ -396,6 +417,7 @@ export async function fetchAlphaLeak(): Promise<{
   try {
     const rows = await queryKolDb<{
       keyword: string;
+      ticker: string | null;
       alpha_first_seen: string;
       retail_first_seen: string;
       lag_hours: string;
@@ -430,6 +452,7 @@ export async function fetchAlphaLeak(): Promise<{
       )
       SELECT
         af.keyword,
+        p.ticker,
         af.first_seen as alpha_first_seen,
         rf.first_seen as retail_first_seen,
         ROUND(EXTRACT(EPOCH FROM (rf.first_seen - af.first_seen)) / 3600, 1) as lag_hours,
@@ -437,6 +460,8 @@ export async function fetchAlphaLeak(): Promise<{
         rf.total_mentions as retail_mentions
       FROM alpha_first af
       JOIN retail_first rf ON af.keyword = rf.keyword
+      LEFT JOIN telegram.project_keywords pk ON af.keyword = pk.keyword
+      LEFT JOIN telegram.projects p ON pk.project_id = p.id
       WHERE rf.first_seen > af.first_seen
       ORDER BY lag_hours ASC
       LIMIT 20
@@ -445,6 +470,7 @@ export async function fetchAlphaLeak(): Promise<{
     return {
       data: rows.map((r) => ({
         keyword: r.keyword,
+        ticker: r.ticker || null,
         alphaFirstSeen: r.alpha_first_seen,
         retailFirstSeen: r.retail_first_seen,
         lagHours: Number(r.lag_hours),
@@ -456,6 +482,193 @@ export async function fetchAlphaLeak(): Promise<{
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("fetchAlphaLeak error:", message);
+    return { data: [], error: message };
+  }
+}
+
+// ─── Hidden Origin (포워딩 발원지) ──────────────────────
+
+export async function fetchHiddenOrigin(): Promise<{
+  data: HiddenOriginItem[];
+  error: string | null;
+}> {
+  try {
+    const now = new Date();
+    const partitionCurrent = `messages_y${now.getFullYear()}m${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const partitionPrev = `messages_y${prev.getFullYear()}m${String(prev.getMonth() + 1).padStart(2, "0")}`;
+
+    const rows = await queryKolDb<{
+      channel_title: string;
+      username: string | null;
+      tier: string | null;
+      forward_count: string;
+      total_views_generated: string;
+    }>(`
+      WITH forwarding_sources AS (
+        SELECT
+          m.fwd_peer_id,
+          COUNT(*) as forward_count,
+          SUM(m.views_count) as total_views_generated
+        FROM (
+          SELECT fwd_peer_id, views_count, chat_id
+          FROM telegram."${partitionCurrent}"
+          WHERE fwd_peer_id IS NOT NULL
+            AND fwd_peer_type = 'channel'
+            AND message_timestamp > NOW() - INTERVAL '30 days'
+          UNION ALL
+          SELECT fwd_peer_id, views_count, chat_id
+          FROM telegram."${partitionPrev}"
+          WHERE fwd_peer_id IS NOT NULL
+            AND fwd_peer_type = 'channel'
+            AND message_timestamp > NOW() - INTERVAL '30 days'
+        ) m
+        WHERE NOT EXISTS (
+          SELECT 1 FROM telegram.channel_discussion_mapping cdm
+          WHERE cdm.channel_id = m.fwd_peer_id
+            AND cdm.groupchat_id = m.chat_id
+        )
+        GROUP BY m.fwd_peer_id
+        ORDER BY forward_count DESC
+        LIMIT 15
+      )
+      SELECT
+        tc.title as channel_title,
+        tc.username,
+        COALESCE(tc.manual_tier, kn.calculated_tier) as tier,
+        fs.forward_count,
+        fs.total_views_generated
+      FROM forwarding_sources fs
+      JOIN telegram.channels tc ON fs.fwd_peer_id = tc.channel_id
+      LEFT JOIN kol.nodes kn ON fs.fwd_peer_id = kn.channel_id
+      ORDER BY fs.forward_count DESC
+    `);
+
+    return {
+      data: rows.map((r) => ({
+        channelTitle: r.channel_title || "Unknown",
+        username: r.username || null,
+        tier: r.tier || null,
+        forwardCount: Number(r.forward_count),
+        totalViewsGenerated: Number(r.total_views_generated || 0),
+      })),
+      error: null,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("fetchHiddenOrigin error:", message);
+    return { data: [], error: message };
+  }
+}
+
+// ─── Retail Intent Spectrum (검색 의도 분석) ─────────────
+
+export async function fetchRetailIntent(
+  keyword: string = "비트코인"
+): Promise<{
+  data: RetailIntentItem[];
+  error: string | null;
+}> {
+  try {
+    const rows = await queryKolDb<{
+      related_keyword: string;
+      search_volume: string;
+      intent_category: string;
+    }>(
+      `
+      SELECT
+        nrk.related_keyword,
+        nrk.search_volume,
+        CASE
+          WHEN nrk.related_keyword ~ '시세|가격|차트|전망|호재|하락|상승' THEN 'Investment'
+          WHEN nrk.related_keyword ~ '하는법|가입|지갑|계좌|거래소|출금|입금|매수' THEN 'Onboarding'
+          WHEN nrk.related_keyword ~ 'ETF|스테이킹|디파이|반감기|백서' THEN 'Technology'
+          ELSE 'General'
+        END as intent_category
+      FROM search_analytics.monthly_naver_related_keywords nrk
+      JOIN search_analytics.keywords k ON nrk.keyword_id = k.id
+      WHERE k.keyword = $1
+        AND nrk.year_month = (SELECT MAX(year_month) FROM search_analytics.monthly_naver_related_keywords)
+      ORDER BY nrk.search_volume DESC
+      LIMIT 20
+    `,
+      [keyword]
+    );
+
+    return {
+      data: rows.map((r) => ({
+        relatedKeyword: r.related_keyword,
+        searchVolume: Number(r.search_volume),
+        intentCategory: r.intent_category as RetailIntentItem["intentCategory"],
+      })),
+      error: null,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("fetchRetailIntent error:", message);
+    return { data: [], error: message };
+  }
+}
+
+// ─── SEO Battlefield (미디어 점유율) ─────────────────────
+
+export async function fetchSEOBattlefield(): Promise<{
+  data: SEOItem[];
+  error: string | null;
+}> {
+  try {
+    const [googleRows, naverRows] = await Promise.all([
+      queryKolDb<{
+        domain: string;
+        avg_share: string;
+        total_appearances: string;
+      }>(`
+        SELECT
+          gdd.domain,
+          ROUND(AVG(gdd.percentage)::numeric, 1) as avg_share,
+          SUM(gdd.count) as total_appearances
+        FROM search_analytics.google_domain_distribution gdd
+        WHERE gdd.collection_timestamp > NOW() - INTERVAL '30 days'
+        GROUP BY gdd.domain
+        ORDER BY total_appearances DESC
+        LIMIT 10
+      `),
+      queryKolDb<{
+        provider: string;
+        article_count: string;
+        share_pct: string;
+      }>(`
+        SELECT
+          provider,
+          COUNT(*) as article_count,
+          ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) as share_pct
+        FROM news_scraper.naver_news_articles
+        WHERE published_at > NOW() - INTERVAL '30 days'
+        GROUP BY provider
+        ORDER BY article_count DESC
+        LIMIT 10
+      `),
+    ]);
+
+    const googleData: SEOItem[] = googleRows.map((r) => ({
+      domain: r.domain,
+      metric: Number(r.avg_share),
+      platform: "Google" as const,
+    }));
+
+    const naverData: SEOItem[] = naverRows.map((r) => ({
+      domain: r.provider,
+      metric: Number(r.article_count),
+      platform: "Naver" as const,
+    }));
+
+    return {
+      data: [...googleData, ...naverData],
+      error: null,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("fetchSEOBattlefield error:", message);
     return { data: [], error: message };
   }
 }
