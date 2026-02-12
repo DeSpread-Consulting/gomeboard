@@ -12,6 +12,7 @@
     "@heroicons/react": "^2.2.0",
     "@notionhq/client": "^5.6.0",
     "@privy-io/react-auth": "^3.9.1",
+    "@sigma/node-image": "^3.0.0",
     "@solana-program/memo": "^0.10.0",
     "@solana-program/system": "^0.10.0",
     "@solana-program/token": "^0.9.0",
@@ -19,15 +20,21 @@
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.1",
     "@vercel/blob": "^2.0.0",
+    "@xyflow/react": "^12.10.0",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.5",
+    "graphology": "^0.26.0",
+    "graphology-layout": "^0.6.1",
+    "graphology-layout-forceatlas2": "^0.10.1",
+    "graphology-types": "^0.24.8",
     "jspdf": "^4.1.0",
     "next": "16.0.10",
     "next-auth": "^4.24.13",
     "pino": "7.11.0",
     "react": "19.2.1",
     "react-dom": "19.2.1",
-    "recharts": "^3.6.0"
+    "recharts": "^3.6.0",
+    "sigma": "^3.0.2"
   },
   "overrides": {
     "pino": "7.11.0"
@@ -36,10 +43,12 @@
     "@tailwindcss/postcss": "^4",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20",
+    "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
+    "pg": "^8.18.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "why-is-node-running": "^3.2.2"

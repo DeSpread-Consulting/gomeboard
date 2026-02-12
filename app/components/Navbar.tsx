@@ -47,6 +47,7 @@ export default function Navbar() {
       ],
     },
     { name: "KOL", path: "/kol", allowed: ["internal"] },
+    { name: "K-Insights", path: "/korea-insights", allowed: ["internal"] },
     { name: "Settle", path: "/settlement", allowed: ["internal"] },
   ];
 
