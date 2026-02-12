@@ -83,19 +83,20 @@ export async function GET(request: Request) {
         updates.subscriber = newCount;
       }
 
-      if (Object.keys(updates).length > 0) {
-        const { error: updateError } = await supabase
-          .from("kol_channels")
-          .update(updates)
-          .eq("id", ch.id);
+      const hadDataChanges = Object.keys(updates).length > 0;
 
-        if (updateError) {
-          results.push({ id: ch.id, username: ch.username, status: `db_error: ${updateError.message}` });
-        } else {
-          results.push({ id: ch.id, username: ch.username, status: "updated", updates });
-        }
+      // 항상 updated_at 갱신 (최근 갱신 시간 추적용)
+      updates.updated_at = new Date().toISOString();
+
+      const { error: updateError } = await supabase
+        .from("kol_channels")
+        .update(updates)
+        .eq("id", ch.id);
+
+      if (updateError) {
+        results.push({ id: ch.id, username: ch.username, status: `db_error: ${updateError.message}` });
       } else {
-        results.push({ id: ch.id, username: ch.username, status: "no_changes" });
+        results.push({ id: ch.id, username: ch.username, status: hadDataChanges ? "updated" : "no_changes", ...(hadDataChanges ? { updates } : {}) });
       }
     } catch (e: any) {
       results.push({ id: ch.id, username: ch.username, status: `error: ${e.message}` });

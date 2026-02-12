@@ -18,13 +18,11 @@ import {
   CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 import jsPDF from "jspdf";
-import { useSendTransaction, useWallets as useEvmWallets } from "@privy-io/react-auth";
+import { useSendTransaction } from "@privy-io/react-auth";
 import {
   useSignAndSendTransaction,
   useWallets,
 } from "@privy-io/react-auth/solana";
-import { createWalletClient, custom, parseUnits } from "viem";
-import { mainnet, arbitrum } from "viem/chains";
 import {
   type PaymentNetwork,
   USDT_ADDRESSES,
@@ -36,18 +34,6 @@ import {
   buildSolanaTransferTx,
 } from "@/utils/payment";
 
-// ERC-20 transfer ABI (for external wallet writeContract)
-const ERC20_TRANSFER_ABI = [
-  {
-    name: "transfer",
-    type: "function",
-    inputs: [
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-] as const;
 
 const supabase = createClient();
 
@@ -66,6 +52,7 @@ type Channel = {
   memo: string;
   is_active: boolean; // [New] 활성 상태 필드
   owner_username?: string; // [New] 소유주 개인 아이디 (DM용)
+  updated_at?: string; // 채널 데이터 최근 갱신 시간
 };
 
 type Settlement = {
@@ -119,8 +106,6 @@ export default function SettlementPage() {
   const { sendTransaction } = useSendTransaction();
   const { signAndSendTransaction } = useSignAndSendTransaction();
   const { wallets: solanaWallets } = useWallets();
-  const { wallets: evmWallets } = useEvmWallets();
-
   const [activeTab, setActiveTab] = useState<
     "submit" | "dashboard" | "channels" | "request"
   >("dashboard");
@@ -130,7 +115,8 @@ export default function SettlementPage() {
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [summary, setSummary] = useState<MonthlySummary[]>([]);
   const [loading, setLoading] = useState(false);
-  const [channelUsageMap, setChannelUsageMap] = useState<Map<number, number>>(new Map());
+  const [channelUsageMap, setChannelUsageMap] = useState<Map<number, { write: number; forward: number }>>(new Map());
+  const [channelLastUpdated, setChannelLastUpdated] = useState<string | null>(null);
   const [expandedChannelId, setExpandedChannelId] = useState<number | null>(
     null,
   );
@@ -142,7 +128,12 @@ export default function SettlementPage() {
   const [inputLinks, setInputLinks] = useState("");
   const [postType, setPostType] = useState<"write" | "forward">("write");
   const [submitDate, setSubmitDate] = useState(""); // 등록 날짜 (빈값이면 오늘)
-  const [toastMessage, setToastMessage] = useState<string | null>(null); // [New] Toast Message State
+  const [toastMessage, setToastMessage] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   // --- 컨텐츠 요청 상태 ---
   const [requestLink, setRequestLink] = useState("");
@@ -197,7 +188,6 @@ export default function SettlementPage() {
     txHash: string;
     network: PaymentNetwork;
   } | null>(null);
-  const [payWalletSource, setPayWalletSource] = useState<"privy" | "external">("privy");
 
   useEffect(() => {
     fetchData();
@@ -221,6 +211,14 @@ export default function SettlementPage() {
         return a.channel_name.localeCompare(b.channel_name);
       });
       setChannels(sorted);
+
+      // 채널 데이터 최근 갱신 시간 추출
+      const latestUpdated = (chData as Channel[]).reduce<string | null>((latest, ch) => {
+        if (!ch.updated_at) return latest;
+        if (!latest) return ch.updated_at;
+        return ch.updated_at > latest ? ch.updated_at : latest;
+      }, null);
+      setChannelLastUpdated(latestUpdated);
     }
 
     // 2. 정산 내역 (월별 필터)
@@ -241,7 +239,7 @@ export default function SettlementPage() {
     if (stData) {
       const rawSettlements = stData as any[];
       setSettlements(rawSettlements);
-      processSummary(rawSettlements);
+      processSummary(rawSettlements, chData ? (chData as Channel[]) : undefined);
     }
 
     // 3. [New] 월별 마감 상태 확인
@@ -254,23 +252,29 @@ export default function SettlementPage() {
 
     setIsMonthClosed(monthData?.is_closed ?? false);
 
-    // 4. 채널별 전체 사용 횟수 조회 (전체 기간)
+    // 4. 채널별 전체 사용 횟수 조회 (전체 기간, 유형별)
     const { data: usageData } = await supabase
       .from("kol_settlements")
-      .select("channel_id");
+      .select("channel_id, post_type");
 
     if (usageData) {
-      const usageMap = new Map<number, number>();
+      const usageMap = new Map<number, { write: number; forward: number }>();
       usageData.forEach((row: any) => {
-        usageMap.set(row.channel_id, (usageMap.get(row.channel_id) || 0) + 1);
+        const prev = usageMap.get(row.channel_id) || { write: 0, forward: 0 };
+        if (row.post_type === "write") prev.write += 1;
+        else prev.forward += 1;
+        usageMap.set(row.channel_id, prev);
       });
       setChannelUsageMap(usageMap);
     }
   };
 
   // --- 데이터 가공 ---
-  const processSummary = (data: Settlement[]) => {
+  const processSummary = (data: Settlement[], latestChannels?: Channel[]) => {
     const map = new Map<number, MonthlySummary>();
+    // 채널 최신 지갑주소 조회용 맵
+    const channelWalletMap = new Map<number, string>();
+    (latestChannels || channels).forEach((ch) => channelWalletMap.set(ch.id, ch.wallet_address));
 
     data.forEach((item) => {
       const chId = item.channel_id;
@@ -282,11 +286,12 @@ export default function SettlementPage() {
           channel_name: item.kol_channels.channel_name,
           username: item.kol_channels.username,
           tier: item.kol_channels.tier,
-          wallet_address: item.wallet_address,
+          // 채널 관리에서 수정된 최신 지갑주소 우선, 없으면 정산 등록 시점 값
+          wallet_address: channelWalletMap.get(chId) ?? item.wallet_address,
           write_count: 0,
           forward_count: 0,
           total_amount: 0,
-          owner_username: item.kol_channels.owner_username, // [New]
+          owner_username: item.kol_channels.owner_username,
           details: [],
         });
       }
@@ -328,10 +333,10 @@ export default function SettlementPage() {
     );
 
     if (error) {
-      alert("상태 변경 실패: " + error.message);
+      showToast("상태 변경 실패: " + error.message, 'error');
     } else {
       setIsMonthClosed(newStatus);
-      alert(newStatus ? "정산이 마감되었습니다." : "마감이 해제되었습니다.");
+      showToast(newStatus ? "정산이 마감되었습니다." : "마감이 해제되었습니다.", 'success');
     }
   };
 
@@ -362,7 +367,7 @@ export default function SettlementPage() {
       .single();
 
     if (monthStatus?.is_closed) {
-      alert(`[차단됨] ${tYear}년 ${tMonth}월은 정산이 마감되었습니다.`);
+      showToast(`[차단됨] ${tYear}년 ${tMonth}월은 정산이 마감되었습니다.`, 'error');
       setLoading(false);
       return;
     }
@@ -435,13 +440,13 @@ export default function SettlementPage() {
     let msg = `처리 완료!\n✅ 성공: ${results.success}건\n❌ 실패: ${results.fail}건`;
     if (results.logs.length > 0)
       msg += `\n\n[실패 사유]\n${results.logs.join("\n")}`;
-    alert(msg);
+    showToast(msg, results.fail > 0 ? 'error' : 'success');
   };
 
   // --- 기능: 채널 추가 ---
   const handleAddChannel = async () => {
     if (!newChannel.channel_name || !newChannel.channel_link)
-      return alert("필수 정보 누락");
+      return showToast("필수 정보 누락", 'error');
     const linkClean = newChannel.channel_link
       .replace("https://", "")
       .replace("http://", "");
@@ -451,9 +456,9 @@ export default function SettlementPage() {
     const { error } = await supabase
       .from("kol_channels")
       .insert({ ...newChannel, username });
-    if (error) alert("오류: " + error.message);
+    if (error) showToast("오류: " + error.message, 'error');
     else {
-      alert("채널 등록 완료");
+      showToast("채널 등록 완료", 'success');
       setNewChannel({
         tier: "",
         channel_name: "",
@@ -507,9 +512,9 @@ export default function SettlementPage() {
       .eq("id", editingChannel.id);
 
     if (error) {
-      alert("수정 실패: " + error.message);
+      showToast("수정 실패: " + error.message, 'error');
     } else {
-      alert("채널 정보가 수정되었습니다.");
+      showToast("채널 정보가 수정되었습니다.", 'success');
       setIsEditModalOpen(false);
       setEditingChannel(null);
       fetchData();
@@ -520,7 +525,7 @@ export default function SettlementPage() {
   const openSettlementEditModal = (settlement: any) => {
     // [New] 마감 체크
     if (isMonthClosed) {
-      alert("마감된 월의 내역은 수정할 수 없습니다.");
+      showToast("마감된 월의 내역은 수정할 수 없습니다.", 'error');
       return;
     }
 
@@ -559,9 +564,9 @@ export default function SettlementPage() {
       .eq("id", editingSettlement.id);
 
     if (error) {
-      alert("수정 실패: " + error.message);
+      showToast("수정 실패: " + error.message, 'error');
     } else {
-      alert("정산 정보가 수정되었습니다.");
+      showToast("정산 정보가 수정되었습니다.", 'success');
       setIsSettlementEditOpen(false);
       setEditingSettlement(null);
       fetchData();
@@ -571,10 +576,15 @@ export default function SettlementPage() {
   // --- 기능: 컨텐츠 요청 전송 ---
   const activeChannels = channels.filter((ch) => ch.is_active && ch.owner_username);
 
-  // 컨텐츠 요청 탭용: 필터링 + 정렬 적용
+  // 컨텐츠 요청 탭용: 필터링 + 정렬 적용 (총합 기준)
+  const getUsageTotal = (chId: number) => {
+    const u = channelUsageMap.get(chId);
+    return u ? u.write + u.forward : 0;
+  };
+
   const filteredRequestChannels = activeChannels
     .filter((ch) => {
-      const count = channelUsageMap.get(ch.id) || 0;
+      const count = getUsageTotal(ch.id);
       if (requestUsageFilter === "0") return count === 0;
       if (requestUsageFilter === "lt5") return count < 5;
       if (requestUsageFilter === "lt10") return count < 10;
@@ -582,10 +592,10 @@ export default function SettlementPage() {
     })
     .sort((a, b) => {
       if (requestSort === "usage_asc") {
-        return (channelUsageMap.get(a.id) || 0) - (channelUsageMap.get(b.id) || 0);
+        return getUsageTotal(a.id) - getUsageTotal(b.id);
       }
       if (requestSort === "usage_desc") {
-        return (channelUsageMap.get(b.id) || 0) - (channelUsageMap.get(a.id) || 0);
+        return getUsageTotal(b.id) - getUsageTotal(a.id);
       }
       // tier (default)
       const scoreA = tierPriority[a.tier?.toUpperCase().trim()] || 99;
@@ -610,11 +620,11 @@ export default function SettlementPage() {
 
   const handleSendContentRequest = (channel: Channel) => {
     if (!requestLink.trim()) {
-      alert("요청할 컨텐츠 링크를 입력해주세요.");
+      showToast("요청할 컨텐츠 링크를 입력해주세요.", 'error');
       return;
     }
     if (!channel.owner_username) {
-      alert("소유주 아이디(owner_username)가 등록되지 않은 채널입니다.");
+      showToast("소유주 아이디(owner_username)가 등록되지 않은 채널입니다.", 'error');
       return;
     }
 
@@ -630,11 +640,11 @@ export default function SettlementPage() {
 
   const handleBulkContentRequest = () => {
     if (!requestLink.trim()) {
-      alert("요청할 컨텐츠 링크를 입력해주세요.");
+      showToast("요청할 컨텐츠 링크를 입력해주세요.", 'error');
       return;
     }
     if (selectedKolIds.length === 0) {
-      alert("요청을 보낼 KOL을 선택해주세요.");
+      showToast("요청을 보낼 KOL을 선택해주세요.", 'error');
       return;
     }
 
@@ -642,8 +652,9 @@ export default function SettlementPage() {
     const noOwner = selected.filter((ch) => !ch.owner_username);
 
     if (noOwner.length > 0) {
-      alert(
-        `다음 채널은 소유주 아이디가 없어 전송이 불가합니다:\n${noOwner.map((ch) => ch.channel_name).join(", ")}`,
+      showToast(
+        `다음 채널은 소유주 아이디가 없어 전송이 불가합니다: ${noOwner.map((ch) => ch.channel_name).join(", ")}`,
+        'info',
       );
     }
 
@@ -659,8 +670,17 @@ export default function SettlementPage() {
   // --- Helper: 클립보드 복사 ---
   const copyToClipboard = (text: string) => {
     if (!text) return;
-    navigator.clipboard.writeText(text);
-    alert(`지갑 주소가 복사되었습니다:\n${text}`);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    showToast(`지갑 주소가 복사되었습니다: ${text}`, 'success');
   };
 
   // --- Style Helpers ---
@@ -689,25 +709,10 @@ export default function SettlementPage() {
     0,
   );
 
-  // --- [New] 기능: 안내 메시지 복사 ---
-  const handleCopyNotice = (item: MonthlySummary) => {
-    const month = selectedDate.getMonth() + 1;
-    const links = item.details.map((d) => d.link_url).join("\n");
-    const msg = `${item.channel_name}님 ${month}월 중간정산 확인요청드립니다.
-작성${item.write_count}건 포워딩 ${item.forward_count}건 총 ${item.total_amount}불
-${links}`;
-
-    navigator.clipboard.writeText(msg);
-    // alert("정산 안내 메시지가 복사되었습니다."); // [Moved] Toast로 변경
-    setToastMessage("복사가 완료되었습니다");
-    setTimeout(() => setToastMessage(null), 3000);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
   // --- [New] 기능: 텔레그램 DM 바로가기 (Deep Link) ---
   const handleSendDM = (item: MonthlySummary) => {
     if (!item.owner_username) {
-      alert("소유주 아이디(owner_username)가 등록되지 않은 채널입니다.");
+      showToast("소유주 아이디(owner_username)가 등록되지 않은 채널입니다.", 'error');
       return;
     }
 
@@ -729,7 +734,7 @@ ${links}`;
   const handleBulkSettlementDM = () => {
     const sendable = summary.filter((item) => item.owner_username);
     if (sendable.length === 0) {
-      alert("owner_username이 등록된 채널이 없습니다.");
+      showToast("owner_username이 등록된 채널이 없습니다.", 'error');
       return;
     }
 
@@ -751,23 +756,25 @@ ${links}`;
   };
 
   // --- 지급 모달 핸들러 ---
-  // 외부 EVM 지갑 찾기
-  const externalEvmWallet = evmWallets.find(
-    (w) => w.walletClientType !== "privy" && w.walletClientType !== "privy-v2"
-  );
-
   const openPayModal = (item: MonthlySummary) => {
     const networks = getAvailableNetworks(item.wallet_address);
     setPayTarget(item);
     setPayNetwork(networks.length > 0 ? networks[0] : null);
     setPayResult(null);
     setPayLoading(false);
-    setPayWalletSource("privy");
     setIsPayModalOpen(true);
   };
 
   const handlePayment = async () => {
     if (!payTarget || !payNetwork) return;
+    if (payTarget.total_amount <= 0) {
+      showToast("지급 금액이 0 이하입니다.", 'error');
+      return;
+    }
+    if (!payTarget.wallet_address?.trim()) {
+      showToast("지갑 주소가 등록되지 않았습니다.", 'error');
+      return;
+    }
     setPayLoading(true);
     setPayResult(null);
 
@@ -778,47 +785,18 @@ ${links}`;
           payTarget.total_amount
         );
 
-        if (payWalletSource === "external" && externalEvmWallet) {
-          // --- External wallet: viem walletClient + writeContract ---
-          const chainId = CHAIN_IDS[payNetwork];
-          await externalEvmWallet.switchChain(chainId);
-          const provider = await externalEvmWallet.getEthereumProvider();
-          const walletClient = createWalletClient({
-            account: externalEvmWallet.address as `0x${string}`,
-            chain: payNetwork === "ethereum" ? mainnet : arbitrum,
-            transport: custom(provider),
-          });
-          const txHash = await walletClient.writeContract({
-            address: USDT_ADDRESSES[payNetwork] as `0x${string}`,
-            abi: ERC20_TRANSFER_ABI,
-            functionName: "transfer",
-            args: [
-              payTarget.wallet_address as `0x${string}`,
-              parseUnits(payTarget.total_amount.toString(), 6),
-            ],
-          });
-          setPayResult({
-            success: true,
-            txHash,
-            network: payNetwork,
-          });
-        } else {
-          // --- Privy embedded wallet (기존 로직) ---
-          const result = await sendTransaction({
-            to: USDT_ADDRESSES[payNetwork] as `0x${string}`,
-            data,
-            chainId: CHAIN_IDS[payNetwork],
-          });
-          setPayResult({
-            success: true,
-            txHash: result.hash,
-            network: payNetwork,
-          });
-        }
-        setToastMessage(`${NETWORK_LABELS[payNetwork]} USDT 전송 완료!`);
-        setTimeout(() => setToastMessage(null), 5000);
+        const result = await sendTransaction({
+          to: USDT_ADDRESSES[payNetwork] as `0x${string}`,
+          data,
+          chainId: CHAIN_IDS[payNetwork],
+        });
+        setPayResult({
+          success: true,
+          txHash: result.hash,
+          network: payNetwork,
+        });
+        showToast(`${NETWORK_LABELS[payNetwork]} USDT 전송 완료!`, 'success');
       } else if (payNetwork === "solana") {
-        // Solana: SPL Token Transfer (항상 Privy 지갑)
         const solanaWallet = solanaWallets[0];
         if (!solanaWallet) {
           throw new Error("Solana 지갑이 연결되지 않았습니다.");
@@ -833,18 +811,21 @@ ${links}`;
           wallet: solanaWallet as any,
           chain: "solana:mainnet",
         });
-        // signature is Uint8Array, convert to base58 string
-        const sigHex = Buffer.from(result.signature).toString("hex");
+        let sigHex: string;
+        try {
+          sigHex = Buffer.from(result.signature).toString("hex");
+        } catch {
+          sigHex = String(result.signature);
+        }
         setPayResult({
           success: true,
           txHash: sigHex,
           network: payNetwork,
         });
-        setToastMessage("Solana USDT 전송 완료!");
-        setTimeout(() => setToastMessage(null), 5000);
+        showToast("Solana USDT 전송 완료!", 'success');
       }
     } catch (e: any) {
-      alert(`전송 실패: ${e.message || e}`);
+      showToast(`전송 실패: ${e.message || e}`, 'error');
     } finally {
       setPayLoading(false);
     }
@@ -853,7 +834,7 @@ ${links}`;
   // --- PDF 생성 ---
   const handleGeneratePdf = async () => {
     if (!pdfEmail.trim()) {
-      alert("이메일을 입력해주세요.");
+      showToast("이메일을 입력해주세요.", 'error');
       return;
     }
     setPdfLoading(true);
@@ -975,7 +956,7 @@ ${links}`;
       setIsPdfModalOpen(false);
       setPdfEmail("");
     } catch (e: any) {
-      alert("PDF 생성 실패: " + e.message);
+      showToast("PDF 생성 실패: " + e.message, 'error');
     } finally {
       setPdfLoading(false);
     }
@@ -1069,13 +1050,20 @@ ${links}`;
               </button>
             )}
             {activeTab === "channels" && (
-              <button
-                onClick={() => setIsPdfModalOpen(true)}
-                className="px-4 py-2.5 bg-white border border-gray-300 rounded-lg font-bold text-sm text-gray-700 hover:bg-gray-100 transition-colors shadow-sm flex items-center gap-1.5"
-              >
-                <DocumentArrowDownIcon className="w-4 h-4" />
-                공유 (PDF)
-              </button>
+              <>
+                <span className="text-xs text-gray-400">
+                  {channelLastUpdated
+                    ? `갱신: ${new Date(channelLastUpdated).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })} ${new Date(channelLastUpdated).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`
+                    : "갱신 정보 없음"}
+                </span>
+                <button
+                  onClick={() => setIsPdfModalOpen(true)}
+                  className="px-4 py-2.5 bg-white border border-gray-300 rounded-lg font-bold text-sm text-gray-700 hover:bg-gray-100 transition-colors shadow-sm flex items-center gap-1.5"
+                >
+                  <DocumentArrowDownIcon className="w-4 h-4" />
+                  공유 (PDF)
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -1147,13 +1135,6 @@ ${links}`;
                         </td>
                         <td className="px-6 py-4 text-center">
                           <div className="flex flex-col gap-1 items-center">
-                            <button
-                              onClick={() => handleCopyNotice(item)}
-                              className="text-white bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded text-xs font-bold transition-colors mb-1"
-                            >
-                              안내복사
-                            </button>
-                            {/* [New] 전송(DM) 버튼 */}
                             <button
                               onClick={() => handleSendDM(item)}
                               className={`px-2 py-1 rounded text-xs font-bold transition-colors mb-1 flex items-center gap-1 ${
@@ -1505,7 +1486,8 @@ ${links}`;
                         </div>
                       )}
                       {filteredRequestChannels.map((ch) => {
-                        const usageCount = channelUsageMap.get(ch.id) || 0;
+                        const usage = channelUsageMap.get(ch.id) || { write: 0, forward: 0 };
+                        const usageCount = usage.write + usage.forward;
                         const usageColor = usageCount === 0
                           ? "bg-gray-100 text-gray-400"
                           : usageCount < 5
@@ -1513,6 +1495,8 @@ ${links}`;
                             : usageCount < 10
                               ? "bg-yellow-100 text-yellow-700"
                               : "bg-green-100 text-green-700";
+                        const showWriteWarning = requestType === "write" && ch.price_write === 0;
+                        const showForwardWarning = requestType === "forward" && ch.price_forward === 0;
                         return (
                           <div
                             key={ch.id}
@@ -1539,9 +1523,22 @@ ${links}`;
                                   <span className="font-bold text-gray-900 text-sm">
                                     {ch.channel_name}
                                   </span>
-                                  <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${usageColor}`}>
-                                    {usageCount}회
+                                  <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${usage.write > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"}`}>
+                                    W:{usage.write}
                                   </span>
+                                  <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${usage.forward > 0 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-400"}`}>
+                                    F:{usage.forward}
+                                  </span>
+                                  {showWriteWarning && (
+                                    <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-red-100/70 text-red-500 border border-red-200">
+                                      작성 미계약
+                                    </span>
+                                  )}
+                                  {showForwardWarning && (
+                                    <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-red-100/70 text-red-500 border border-red-200">
+                                      포워딩 미계약
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-xs text-gray-500 mt-0.5">
                                   @{ch.username} · 소유주: @{ch.owner_username?.replace("@", "")}
@@ -1670,18 +1667,16 @@ ${links}`;
                           </td>
                           <td className="px-6 py-4 text-center">
                             {(() => {
-                              const count = channelUsageMap.get(ch.id) || 0;
-                              const color = count === 0
-                                ? "bg-gray-100 text-gray-400"
-                                : count < 5
-                                  ? "bg-red-100 text-red-600"
-                                  : count < 10
-                                    ? "bg-yellow-100 text-yellow-700"
-                                    : "bg-green-100 text-green-700";
+                              const usage = channelUsageMap.get(ch.id) || { write: 0, forward: 0 };
                               return (
-                                <span className={`px-2 py-1 rounded text-xs font-bold ${color}`}>
-                                  {count}회
-                                </span>
+                                <div className="flex items-center justify-center gap-1">
+                                  <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${usage.write > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"}`}>
+                                    W:{usage.write}
+                                  </span>
+                                  <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${usage.forward > 0 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-400"}`}>
+                                    F:{usage.forward}
+                                  </span>
+                                </div>
                               );
                             })()}
                           </td>
@@ -1692,7 +1687,9 @@ ${links}`;
                             {ch.wallet_address || "-"}
                           </td>
                           <td className="px-6 py-4 text-right font-bold">
-                            ${ch.price_write} / ${ch.price_forward}
+                            <span className={ch.price_write === 0 ? "text-red-400" : ""}>${ch.price_write}</span>
+                            {" / "}
+                            <span className={ch.price_forward === 0 ? "text-red-400" : ""}>${ch.price_forward}</span>
                           </td>
                           {/* [New] Status Column */}
                           <td className="px-6 py-4 text-xs text-gray-500 truncate max-w-[150px]">
@@ -2211,52 +2208,9 @@ ${links}`;
               </div>
             </div>
 
-            {/* 지갑 선택 + 네트워크 선택 */}
+            {/* 네트워크 선택 */}
             {!payResult && (
               <>
-                {/* 지갑 선택 (EVM 네트워크일 때만) */}
-                {payTarget && getAvailableNetworks(payTarget.wallet_address).some(n => n === "ethereum" || n === "arbitrum") && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      지갑 선택
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setPayWalletSource("privy")}
-                        className={`px-3 py-2.5 rounded-lg text-sm font-bold border-2 transition-all ${
-                          payWalletSource === "privy"
-                            ? "border-purple-500 bg-purple-50 text-purple-700"
-                            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                        }`}
-                      >
-                        Privy 지갑
-                      </button>
-                      <button
-                        onClick={() => externalEvmWallet && setPayWalletSource("external")}
-                        disabled={!externalEvmWallet}
-                        className={`px-3 py-2.5 rounded-lg text-sm font-bold border-2 transition-all ${
-                          payWalletSource === "external"
-                            ? "border-purple-500 bg-purple-50 text-purple-700"
-                            : !externalEvmWallet
-                              ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed"
-                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                        }`}
-                        title={!externalEvmWallet ? "마이페이지에서 외부 지갑을 먼저 연결하세요" : "외부 지갑으로 전송"}
-                      >
-                        개인 지갑
-                        {!externalEvmWallet && (
-                          <span className="block text-[10px] mt-0.5 text-gray-400">미연결</span>
-                        )}
-                      </button>
-                    </div>
-                    {payWalletSource === "external" && externalEvmWallet && (
-                      <p className="text-[10px] text-gray-500 mt-1.5 font-mono truncate">
-                        {externalEvmWallet.address}
-                      </p>
-                    )}
-                  </div>
-                )}
-
                 <div className="mb-4">
                   <label className="block text-sm font-bold text-gray-700 mb-2">
                     네트워크 선택
@@ -2347,24 +2301,26 @@ ${links}`;
         </div>
       )}
 
-      {/* --- [New] Toast Notification UI --- */}
+      {/* --- Toast Notification UI --- */}
       {toastMessage && (
         <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-up">
           <div className="bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2">
-            <svg
-              className="w-5 h-5 text-green-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            <span className="font-bold text-sm">{toastMessage}</span>
+            {toastMessage.type === 'success' && (
+              <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            {toastMessage.type === 'error' && (
+              <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            )}
+            {toastMessage.type === 'info' && (
+              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+              </svg>
+            )}
+            <span className="font-bold text-sm">{toastMessage.message}</span>
           </div>
         </div>
       )}
