@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from "react";
-import DashboardClient, { ProjectCard } from "../DashboardClient";
+import DashboardClient, { ProjectCard } from "../components/DashboardClient";
 import { unstable_cache } from "next/cache"; // [NEW] 캐시 import
 
 // ----------------------------------------------------------------------

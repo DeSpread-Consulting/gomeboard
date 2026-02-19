@@ -2,7 +2,7 @@
 
 > Claude Code context document. KOL DB(PostgreSQL) 전체 스키마. DB 컬럼 확인을 위해 직접 쿼리하지 않아도 됨.
 
-> 최종 업데이트: 2026-02-12 (실제 DB에서 information_schema 덤프)
+> 최종 업데이트: 2026-02-19 (05 데이터베이스 스키마.md 통합 완료)
 
 ---
 
@@ -18,6 +18,10 @@
 8. [public](#8-public)
 9. [Enum 타입](#9-enum-타입)
 10. [주의사항 / 참고노트](#10-주의사항--참고노트)
+11. [Data Update Schedule](#11-data-update-schedule)
+12. [ER Diagram](#12-er-diagram)
+13. [Access Control](#13-access-control)
+14. [Common Queries](#14-common-queries)
 
 ---
 
@@ -385,6 +389,7 @@
 | created_at | timestamp without time zone | YES | default: CURRENT_TIMESTAMP |
 | updated_at | timestamp with time zone | NO | default: now() AT TIME ZONE 'utc' |
 | id | integer | NO | PK |
+| is_active | boolean | YES | ⚠️ 스키마 문서에만 기재, **실제 DB 컬럼 미존재 확인됨** (2026-02-13) |
 
 **인덱스:** `project_keywords_pkey`, `uq_project_keyword`
 
@@ -489,21 +494,18 @@
 
 ### 2.19 daily_project_channel_scores_v2
 
-> 프로젝트별 채널 일간 스코어 (v2, lookback_days 포함)
+> 프로젝트별 채널 일간 스코어 (v2). chat_score + channel_score = total_score. Hourly 업데이트. ⚠️ **대시보드 코드에서 미사용** (DB에만 존재)
 
 | 컬럼 | 타입 | Nullable | 비고 |
 |------|------|----------|------|
-| project_id | integer | NO | PK 일부 |
-| stats_date | date | NO | PK 일부 |
-| channel_id | bigint | NO | PK 일부 |
-| lookback_days | integer | NO | PK 일부 |
-| score | double precision | NO | |
-| mention_count | integer | NO | |
-| avg_participants | double precision | YES | |
-| avg_channel_views | double precision | YES | |
-| avg_mentions_views | double precision | YES | |
-| created_at | timestamp with time zone | NO | default: now() AT TIME ZONE 'utc' |
-| updated_at | timestamp with time zone | NO | default: now() AT TIME ZONE 'utc' |
+| id | bigserial | NO | PK |
+| project_id | integer | NO | |
+| channel_id | bigint | NO | |
+| stats_date | date | NO | |
+| chat_score | numeric | YES | 채팅 스코어 |
+| channel_score | numeric | YES | 채널 스코어 |
+| total_score | numeric | YES | chat_score + channel_score |
+| rank | integer | YES | 순위 |
 
 **인덱스:** `daily_project_channel_scores_v2_pk`, `dpcs2_rank_idx`, `dpcs2_series_idx`
 
@@ -546,14 +548,14 @@
 
 ### 2.22 tracking_keyword_mentions (파티션 테이블)
 
-> 추적 키워드 일별 멘션 수. 월별 파티션 (`tracking_keyword_mentions_y{YYYY}m{MM}`)
+> 추적 키워드 일별 멘션 수. 날짜 기준 파티션 (`tracking_keyword_mentions_y{YYYY}m{MM}`)
 
 | 컬럼 | 타입 | Nullable | 비고 |
 |------|------|----------|------|
-| id | bigint | NO | PK, auto-increment |
-| group_id | integer | NO | |
+| id | bigserial | NO | composite PK (id + date) |
+| group_id | integer | NO | FK -> tracking_keyword_groups.id |
 | keyword | text | NO | |
-| date | date | NO | |
+| date | date | NO | composite PK (id + date), 파티션 키 |
 | count | integer | NO | |
 | created_at | timestamp with time zone | NO | default: now() |
 | updated_at | timestamp with time zone | NO | default: now() |
@@ -1203,41 +1205,21 @@
 
 ### 7.7 storyteller_message_grades
 
-> 메시지 품질 등급 (LLM 분석 결과)
+> 메시지 품질 점수 (LLM 분석 결과). **NOTE: grade(A/B/C/D) 컬럼은 제거됨 — numeric scores 방식으로 변경.**
 
 | 컬럼 | 타입 | Nullable | 비고 |
 |------|------|----------|------|
-| id | uuid | NO | PK, default: gen_random_uuid() |
-| tracking_keyword_group_id | integer | NO | |
-| topic | text | NO | |
+| id | bigserial | NO | PK |
 | message_id | bigint | NO | |
-| message_text | text | NO | |
-| source | text | NO | default: 'telegram' |
-| created_at | timestamp with time zone | NO | default: now() |
-| updated_at | timestamp with time zone | NO | default: now() |
-| analyzed_at | timestamp with time zone | NO | default: now() |
-| is_main | smallint | NO | 메인 토픽 여부 |
-| short_or_fragmented | smallint | NO | 짧거나 단편적 여부 |
-| length_chars | integer | NO | 문자 수 |
-| length_sents | integer | NO | 문장 수 |
-| evidence_types | smallint | NO | 근거 유형 수 |
-| evidence_fact | smallint | NO | 사실 근거 여부 |
-| evidence_numeric | smallint | NO | 수치 근거 여부 |
-| evidence_official | smallint | NO | 공식 근거 여부 |
-| evidence_urls_total | integer | NO | default: 0, URL 근거 수 |
-| adj_flag | smallint | NO | 수식어 플래그 |
-| hype_count | integer | NO | default: 0, 과장 표현 수 |
-| cta_elsewhere | smallint | NO | 외부 CTA 여부 |
-| grade | USER-DEFINED (storyteller_message_grade) | NO | 등급 (A/B/C/D) |
-| reason | text | YES | 등급 사유 |
-| topic_mentions | integer | NO | default: 0 |
-| other_max | integer | NO | default: 0 |
-| topic_dom_ratio | numeric | NO | default: 0 |
-| sent_topic | integer | NO | default: 0 |
-| sent_any | integer | NO | default: 0 |
-| sent_cov | numeric | NO | default: 0 |
-| intro_hit | smallint | NO | default: 0 |
-| raw_result | jsonb | NO | LLM 원본 결과 |
+| chat_id | bigint | NO | |
+| topic | text | YES | |
+| relevance_score | integer | YES | 1-10, 관련성 점수 |
+| quality_score | integer | YES | 1-10, 품질 점수 |
+| engagement_score | integer | YES | 1-10, 참여도 점수 |
+| originality_score | integer | YES | 1-10, 독창성 점수 |
+| total_score | numeric(5,2) | YES | 종합 점수 |
+| reasoning | text | YES | 점수 산정 사유 |
+| graded_at | timestamp with time zone | YES | 채점 시각 |
 
 **인덱스:** `storyteller_message_grades_pkey`, `storyteller_message_grades_tracking_keyword_group_id_messag_key`
 
@@ -1418,3 +1400,156 @@
 9. **pgvector 사용**: `news_article_embeddings.embedding`, `n8n_vectors_news_snippet.embedding`, `telegram.message_embeddings.embedding` 컬럼은 pgvector 타입. HNSW/IVFFlat 인덱스 사용.
 
 10. **Foreign Key**: 현재 fkMap이 비어 있음 -- FK 제약조건 없이 애플리케이션 레벨에서 관계 관리. 조인 시 존재하지 않는 참조에 주의.
+
+11. **`storyteller_message_grades`는 grade(A/B/C/D)가 아닌 numeric scores 사용** -- relevance_score, quality_score, engagement_score, originality_score (각 1-10) + total_score(numeric(5,2)). 기존 `grade` enum 컬럼은 제거됨.
+
+12. **`daily_project_channel_scores_v2`**: 프로젝트별 채널 스코어 -- chat_score + channel_score = total_score. Hourly 업데이트 (DAG: `hourly_telegram_compute_scores`).
+
+13. **`project_keywords.is_active`**: ⚠️ 스키마 문서(05)에 기재돼 있으나 **실제 DB에 컬럼 미존재** (2026-02-13 확인). 쿼리에서 사용하지 말 것.
+
+---
+
+## 11. Data Update Schedule
+
+| Table | Frequency | DAG |
+|-------|-----------|-----|
+| telegram.messages | Hourly | telegram_chat_crawler |
+| telegram.channel_metrics | 4 hours | telegram_channel_metrics |
+| telegram.daily_keyword_stats | Hourly | hourly_telegram_keyword_mentions |
+| telegram.hourly_keyword_stats | Hourly | hourly_telegram_keyword_mentions |
+| telegram.tracking_keyword_mentions | Hourly | hourly_telegram_tracking_keyword_mentions |
+| storyteller.storyteller_message_grades | Hourly | storyteller_message_grading |
+| telegram.daily_project_channel_scores_v2 | Hourly | hourly_telegram_compute_scores |
+
+---
+
+## 12. ER Diagram
+
+```mermaid
+erDiagram
+    channels ||--o{ messages : "has"
+    channels ||--o{ channel_metrics : "has"
+    channels ||--o{ channel_views_snapshot : "has"
+
+    projects ||--o{ project_keywords : "has"
+    projects ||--o{ daily_project_channel_scores_v2 : "has"
+
+    tracking_keyword_groups ||--o{ tracking_keywords : "contains"
+    tracking_keyword_groups ||--o{ tracking_keyword_mentions : "produces"
+    tracking_keyword_groups ||--o{ tracking_keyword_mentions_hourly : "produces"
+
+    channels {
+        bigint channel_id PK
+        varchar username UK
+        varchar title
+        boolean is_monitored
+        varchar status
+    }
+
+    messages {
+        bigint id PK
+        bigint message_id
+        bigint chat_id FK
+        text content
+        timestamp message_timestamp
+    }
+
+    projects {
+        int id PK
+        text ticker UK
+        boolean tge
+    }
+
+    tracking_keyword_groups {
+        int id PK
+        text name
+        text type
+        boolean is_active
+    }
+```
+
+---
+
+## 13. Access Control
+
+### 13.1 Read-Only Roles
+
+| Role | Purpose | Access |
+| --- | --- | --- |
+| `analyst_ro` | 분석가용 | SELECT on all schemas |
+| `n8n_ro` | n8n 워크플로우용 | SELECT on all schemas |
+
+### 13.2 Connection Info
+
+```
+# 참조: 1Password > DeSpread Engineering > Supabase Credentials
+
+Host: aws-0-ap-northeast-2.pooler.supabase.com
+Port: 5432
+Database: postgres
+```
+
+### 13.3 Edge Function API
+
+읽기 전용 API 접근:
+
+```
+Base URL: https://jtubvpmekasodzakasgv.supabase.co/functions/v1/readonly-api
+API Key: (1Password 참조)
+```
+
+---
+
+## 14. Common Queries
+
+### 14.1 채널 목록 조회
+
+```sql
+-- 모니터링 중인 KOL 채널
+SELECT channel_id, username, title
+FROM telegram.channels
+WHERE is_monitored = true AND category = 'KOL'
+ORDER BY title;
+```
+
+### 14.2 최근 메시지 조회
+
+```sql
+-- 특정 채널의 최근 100개 메시지
+SELECT message_id, content, message_timestamp, views_count
+FROM telegram.messages
+WHERE chat_id = 1234567890
+  AND message_timestamp >= NOW() - INTERVAL '7 days'
+ORDER BY message_timestamp DESC
+LIMIT 100;
+```
+
+### 14.3 키워드 언급량 조회
+
+```sql
+-- 최근 7일간 BTC 키워드 언급량
+SELECT stats_date, SUM(mention_count) as total_mentions
+FROM telegram.daily_keyword_stats
+WHERE ticker = 'BTC'
+  AND stats_date >= CURRENT_DATE - INTERVAL '7 days'
+GROUP BY stats_date
+ORDER BY stats_date;
+```
+
+### 14.4 채널 스코어 리더보드
+
+```sql
+-- 프로젝트별 상위 10개 채널
+SELECT
+    c.username,
+    s.total_score,
+    s.chat_score,
+    s.channel_score,
+    s.rank
+FROM telegram.daily_project_channel_scores_v2 s
+JOIN telegram.channels c ON s.channel_id = c.channel_id
+WHERE s.project_id = 1
+  AND s.stats_date = CURRENT_DATE - 1
+ORDER BY s.rank
+LIMIT 10;
+```

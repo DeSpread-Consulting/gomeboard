@@ -46,6 +46,7 @@ export default function Navbar() {
       ],
     },
     { name: "K-Insights", path: "/korea-insights", allowed: ["internal"] },
+    { name: "K-Data", path: "/korea-data", allowed: ["internal"] },
     { name: "Oracle", path: "/oracle", allowed: ["internal"] },
     { name: "KOL tier", path: "/kol", allowed: ["internal"] },
     { name: "KOL Settle", path: "/settlement", allowed: ["internal"] },
