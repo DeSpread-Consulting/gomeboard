@@ -18,17 +18,54 @@
 
 ```
 app/
-├── layout.tsx              # RootLayout (Providers 래핑)
-├── providers.tsx            # PrivyProvider 설정
-├── page.tsx                 # 홈 (/)
-├── mypage/page.tsx          # 마이페이지 - 계정연동, 지갑, 채널인증, 랭킹
-├── settlement/page.tsx      # KOL 정산 대시보드 - 링크등록, 요약, 지급, 채널관리
-├── kol/page.tsx             # KOL 리더보드 (public)
-├── crypto-dashboard/page.tsx# 크립토 대시보드
-├── projects/page.tsx        # 프로젝트 목록
-├── reports/page.tsx         # 리포트
-├── storyteller/page.tsx     # 스토리텔러
-├── kimchimap/page.tsx       # 김치맵
+├── layout.tsx                # RootLayout (Providers 래핑)
+├── providers.tsx              # PrivyProvider 설정
+├── page.tsx                   # 홈 (/) — Server Component → DashboardClient
+├── components/
+│   ├── Navbar.tsx             # 네비게이션 바
+│   ├── AuthWrapper.tsx        # 인증 래퍼
+│   ├── LoginGuard.tsx         # 로그인 가드
+│   ├── Footer.tsx             # 푸터
+│   ├── DashboardClient.tsx    # 대시보드 공유 컴포넌트 (/, /projects)
+│   └── loading.tsx            # 로딩 스피너
+├── hooks/
+│   └── useUserRole.ts         # guest/external/internal 역할 판별
+├── mypage/
+│   ├── page.tsx               # Server Component (thin wrapper)
+│   └── MyPageClient.tsx       # 계정연동, 지갑, 채널인증, 랭킹
+├── settlement/
+│   ├── page.tsx               # Server Component (thin wrapper)
+│   └── SettlementClient.tsx   # KOL 정산 대시보드
+├── kol/
+│   ├── page.tsx               # Server Component (데이터 fetch)
+│   ├── KOLClient.tsx          # KOL 네트워크 시각화
+│   └── KOLGraph.tsx           # sigma.js 그래프 (dynamic import, ssr:false)
+├── oracle/
+│   ├── page.tsx               # Server Component (ISR 60초)
+│   ├── actions.ts             # Server Actions
+│   └── components/
+│       ├── DashboardContent.tsx
+│       ├── PremiumChart.tsx
+│       ├── StockIndexChart.tsx
+│       └── StockMajorChart.tsx
+├── korea-insights/
+│   ├── page.tsx               # Server Component (ISR 300초)
+│   ├── actions.ts             # Server Actions (8개)
+│   └── components/            # 8개 위젯 컴포넌트
+├── korea-data/
+│   ├── page.tsx               # Server Component (ISR 300초)
+│   ├── actions.ts             # Server Actions
+│   └── components/            # 10개 컴포넌트
+├── projects/page.tsx          # 프로젝트 목록 → DashboardClient
+├── reports/
+│   ├── page.tsx               # Server Component
+│   └── ReportClient.tsx
+├── storyteller/
+│   ├── page.tsx               # Server Component
+│   └── StorytellerClient.tsx
+├── kimchimap/
+│   ├── page.tsx               # Server Component
+│   └── KimchiMapClient.tsx
 ├── api/
 │   ├── auth/[...nextauth]/route.ts
 │   ├── my-rank/route.ts
@@ -39,14 +76,23 @@ app/
 │       ├── storyteller/route.ts
 │       └── update-channels/route.ts
 utils/
-├── payment.ts              # USDT 전송 (EVM ERC-20 + Solana SPL Token)
-├── balance.ts              # 잔액 조회 (EVM ETH/USDT + Solana SOL/USDT)
+├── payment.ts                # USDT 전송 (EVM ERC-20 + Solana SPL Token)
+├── balance.ts                # 잔액 조회 (EVM ETH/USDT + Solana SOL/USDT)
+├── kol-db.ts                 # KOL 네트워크 DB (queryKolNodes, queryKolEdges)
 └── supabase/
-    ├── client.ts           # 브라우저용 Supabase 클라이언트
-    ├── server.ts           # 서버용 Supabase 클라이언트
-    ├── oracle-client.ts
-    └── oracle-server.ts
+    ├── client.ts             # 브라우저용 Supabase 클라이언트
+    ├── server.ts             # 서버용 Supabase 클라이언트
+    ├── kol-db.ts             # KOL DB Pool (queryKolDb, getCmcPartitionTable)
+    ├── oracle-client.ts      # Oracle 브라우저 클라이언트
+    └── oracle-server.ts      # Oracle 서버 클라이언트
 ```
+
+### 페이지 구조 규칙
+- `page.tsx`는 항상 Server Component (`"use client"` 금지)
+- 클라이언트 로직은 별도 `{Page}Client.tsx`로 분리
+- 컴포넌트 3개 이상이면 `components/` 디렉토리 사용
+- Server Actions은 `actions.ts`에 분리
+- 2개 이상 페이지에서 공유하는 컴포넌트는 `app/components/`에 배치
 
 ---
 
@@ -172,7 +218,7 @@ KOL_DB_PASSWORD=ca64ddwg6JToV6KJLMmm
 | `hourly_channel_keyword_stats` | 1M+ | **channel_id**, project_id, keyword, mention_count, hour_bucket | 채널별 시간대별 |
 | `projects` | 372 | id, ticker, tge(bool), logo | 크립토 프로젝트 |
 | `project_keywords` | 714 | project_id, keyword | 프로젝트→키워드 매핑 |
-| `daily_project_channel_scores_v2` | 10.1M | project_id, stats_date, channel_id, lookback_days(7/30/90), score, mention_count, avg_participants, avg_channel_views, avg_mentions_views | 채널별 프로젝트 영향력 |
+| `daily_project_channel_scores_v2` | 10.1M | id, project_id, channel_id, stats_date, chat_score, channel_score, total_score, rank | ⚠️ **대시보드 코드 미사용** (DB에만 존재) |
 | `views_growth_tracking` | 4.2M | channel_id, hour_bucket, hourly_views_added, hourly_forwards_added, growth_rate, trending_score | 시간별 조회수 성장 |
 | `channel_views_snapshot` | 4.2M | channel_id, snapshot_time, total_channel_views, avg_views, message_count | 채널 뷰 스냅샷 |
 | `tracking_keyword_groups` | 65 | id, name, type, is_active | 키워드 그룹 (storyteller 등) |
@@ -221,7 +267,7 @@ KOL_DB_PASSWORD=ca64ddwg6JToV6KJLMmm
 |--------|-------|----------|------|
 | `storyteller_leaderboard_scores` | 708K | group_id, stats_date, channel_id, lookback_days(7/30/90), score, mention_count, avg_channel_views, avg_mentions_views, raw_score, quality_score, traffic_score, tier | 리더보드 스코어 |
 | `storyteller_leaderboards` | 34 | id, **tracking_keyword_group_id**, name, is_public, logo | 리더보드 설정 (tracking_keyword_groups와 연결) |
-| `storyteller_message_grades` | 75K | tracking_keyword_group_id, topic, message_id, message_text, **grade**(A/B/C/D enum), reason, is_main, length_chars, evidence_types, hype_count | AI 메시지 품질 평가 |
+| `storyteller_message_grades` | 75K | message_id, chat_id, topic, **relevance_score**(1-10), **quality_score**(1-10), **engagement_score**(1-10), **originality_score**(1-10), total_score(numeric), reasoning, graded_at | AI 메시지 품질 평가 (numeric scores 방식, grade enum 제거됨) |
 
 #### public 스키마
 | 테이블 | 행 수 | 비고 |
@@ -364,6 +410,118 @@ Row 5: SEO Battlefield (100%)                             — full-width (NEW)
 
 ---
 
+## 8-2. Korea Data 페이지 (`/korea-data`)
+
+> 2026-02-13 생성. Gemini 3-pro-preview와 3라운드 토론으로 설계.
+> 2026-02-13 리팩토링: 데이터 파이프라인 전면 재작성 (커버리지 문제 해결 + bigint 오버플로 수정 + 뉴스 범용 키워드 전환)
+> 2026-02-19 구조 재설계: 점진적 로딩, 뉴스 독립 분리, 거래소 유동성 수정, High Impact Mentions 추가
+
+### 컨셉: "프로젝트별 한국 시장 스코어카드"
+`/korea-insights`가 시장 전체 인사이트라면, `/korea-data`는 개별 프로젝트의 한국 현황을 원시 데이터 기반으로 조회하는 페이지.
+
+| | `/korea-insights` | `/korea-data` |
+|---|---|---|
+| 성격 | 시장 전체 인사이트/분석 | 프로젝트별 원시 데이터 조회 |
+| 단위 | 시장 전체 | 개별 프로젝트 (ticker 선택) |
+| 목적 | Go-to-Market 전략 수립 | 프로젝트 한국 현황 스코어카드 |
+
+### 파일 구조
+```
+app/korea-data/
+├── page.tsx                          # 서버 페이지 (ISR 300초, 뉴스 서버사이드 fetch)
+├── actions.ts                        # 서버 액션
+│   ├── fetchProjectList()            # 프로젝트 리스트 (372개)
+│   ├── fetchTelegramScore(ticker, projectId) # 텔레그램 스코어
+│   ├── fetchTelegramSamples(projectId, ticker) # High Impact Mentions (top 5 채널 → 최근 7일 메시지)
+│   ├── fetchSEOScore(projectId)      # SEO 스코어 (project_keywords 브릿지)
+│   ├── fetchYoutubeScore(projectId)  # 유튜브 스코어 (videoId 포함)
+│   ├── fetchNewsData()               # 뉴스 데이터 (프로젝트 무관, 카테고리 매핑)
+│   └── fetchExchangeScore(ticker)    # 거래소 스코어 (KRW 페어 SUM, Post-TGE only)
+└── components/
+    ├── KoreaDataClient.tsx           # 메인 클라이언트 (점진적 로딩, 4열 스코어카드, 클라이언트 K-Score 계산)
+    ├── ProjectSelector.tsx           # 프로젝트 검색/선택 드롭다운
+    ├── ScoreCard.tsx                 # 개별 스코어 카드 (0-100점 + subtitle)
+    ├── DetailTabs.tsx                # 상세 데이터 탭 (4개: Telegram/SEO/YouTube/Exchange)
+    ├── TelegramDetail.tsx            # 텔레그램 상세 + High Impact Mentions
+    ├── SEODetail.tsx                 # SEO 상세 (네이버 검색량 추이 + Naver 검색 링크)
+    ├── YoutubeDetail.tsx             # 유튜브 상세 (YouTube 링크 포함)
+    ├── NewsSection.tsx               # 뉴스 독립 섹션 (하단 항상 표시, 카테고리 필터)
+    ├── ExchangeDetail.tsx            # 거래소 상세 (KRW 유동성 + Kimchi Premium placeholder)
+    └── RawDataPanel.tsx              # 디버그 패널
+```
+
+### 아키텍처 변경 (2026-02-19)
+
+#### 점진적 로딩
+- 기존: `fetchKScore()` → 모든 하위 점수를 `Promise.all`로 한번에 fetch
+- 변경: 개별 fetch 분리 → 각 ScoreCard가 독립적으로 로딩 (완료되는 대로 표시)
+- K-Score는 모든 하위 점수 도착 후 클라이언트에서 가중평균 계산
+
+#### 뉴스 독립 분리
+- 뉴스는 프로젝트 무관 데이터(범용 키워드 ~11개)이므로 K-Score에서 제외
+- 페이지 하단에 항상 표시되는 독립 섹션으로 분리
+- 3개 카테고리(코인/산업기술/시장규제)로 그룹핑하여 필터 제공
+- 서버사이드에서 미리 fetch하여 프로젝트 미선택 시에도 표시
+
+#### 거래소 유동성 수정
+- AVG → SUM으로 변경하여 거래소별 총 유동성 표시
+- KRW 마켓 페어만 필터 (`market_pair LIKE '%/KRW'`)
+
+### 4개 스코어 + K-Score (뉴스 제외)
+| 스코어 | 데이터 소스 | Pre-TGE 가중치 | Post-TGE 가중치 |
+|--------|------------|---------------|----------------|
+| Telegram | `daily_channel_keyword_stats` + `hourly_channel_keyword_stats` + `channels` + `kol.nodes` + `channel_metrics` | 59% | 29% |
+| SEO | `monthly_naver_search_stats` (via `project_keywords` 브릿지) | 23% | 12% |
+| YouTube | `youtube.videos` + `video_metrics` + `video_keywords` + `project_keywords` | 18% | 12% |
+| Exchange | `cmc_exchange_market_pairs` (한국 거래소, KRW 페어 SUM) | 0% | 47% |
+
+### Telegram 스코어 공식 (리팩토링 후)
+- **Volume (40%)**: `log(totalMentions+1) / log(10000) * 100` (cap 100)
+- **Trend (30%)**: `50 + mentionTrend%` (7일 vs 이전 7일 변화율, clamp 0-100)
+- **Reach (30%)**: `uniqueChannels / 50 * 100` (cap 100)
+
+### 크로스 스키마 연결 (리팩토링 후)
+```
+telegram.projects (id, ticker)
+  → daily_channel_keyword_stats.project_id (텔레그램 멘션 — 가장 넓은 커버리지)
+  → hourly_channel_keyword_stats.project_id (시간별 히트맵)
+  → project_keywords.project_id → search_analytics.keywords.keyword (SEO 브릿지)
+  → project_keywords.project_id → youtube.keywords.keyword (유튜브 브릿지)
+  → currencies.symbol = ticker (거래소 데이터)
+
+news_scraper.naver_news_articles (프로젝트 무관)
+  → search_keyword로 그룹 (비트코인, 가상자산, 블록체인 등 11개 범용 키워드)
+```
+
+### 리팩토링 이력 (2026-02-13)
+
+#### 문제 1: Telegram 커버리지 부족
+- **원인**: `storyteller_message_grades`는 `tracking_keyword_groups` (65개) 경유 → 372개 중 17.5%만 커버
+- **해결**: `daily_channel_keyword_stats` (project_id 직접 인덱싱, 854K행) + `hourly_channel_keyword_stats` 사용
+- ⚠️ `daily_keyword_stats` (ticker 기반)는 매칭 불안정 → `_channel_` 버전 (project_id 기반) 사용
+
+#### 문제 2: SEO 조인 병목
+- **원인**: `tracking_keyword_groups.name = ticker` → `tracking_keywords` → `search_analytics.keywords` (65개 그룹에 병목)
+- **해결**: `project_keywords` (714행, project_id → keyword)를 브릿지로 사용하여 직접 `search_analytics.keywords` 조인
+
+#### 문제 3: News 프로젝트 매칭 불가
+- **원인**: `naver_news_articles`는 11개 범용 키워드(비트코인, 가상자산, 블록체인 등)로만 수집 — 개별 프로젝트 키워드와 매칭 안 됨
+- **해결**: 프로젝트별 뉴스 → 범용 키워드 기반 전체 기사 표시로 전환 (`search_keyword`로 그룹)
+
+#### 문제 4: PostgreSQL bigint→int 오버플로
+- **원인**: `channel_id::int` 캐스팅 시 bigint 값이 int 범위 초과 (에러 22003, routine int84)
+- **해결**: 모든 `::int` 캐스트를 `::bigint`로 변경, `channel_id`는 `::text`로 변환 (pg 라이브러리가 bigint를 string 반환)
+
+#### 문제 5: project_keywords.is_active 미존재
+- **원인**: 스키마 문서에는 `is_active` 컬럼 기재되어 있으나 실제 DB에 존재하지 않음
+- **해결**: `is_active` 필터 전부 제거, DB_SCHEMA.md에 경고 추가
+
+#### 문제 6: Recharts v3 tickFormatter 타입
+- **원인**: Recharts v3에서 tickFormatter에 non-string 값이 전달됨 (`v.slice is not a function`)
+- **해결**: `(v) => String(v).slice(2)` 로 래핑
+
+---
+
 ## 9. Supabase 인스턴스 정리
 
 | 인스턴스 | 환경변수 | 용도 | 연결 방식 |
@@ -378,7 +536,7 @@ Row 5: SEO Battlefield (100%)                             — full-width (NEW)
 
 - Privy 임베디드 지갑은 **절대 unlinkWallet 호출 금지** (영구 삭제됨)
 - Solana `useWallets` 타입에 `walletClientType`이 없으므로 `as any` 캐스팅 필요
-- `settlement/page.tsx`는 약 2200줄로 큰 파일. 읽을 때 offset/limit 사용 필요
+- `settlement/SettlementClient.tsx`는 약 2300줄로 큰 파일. 읽을 때 offset/limit 사용 필요
 - 공용 RPC는 rate limit 있으므로 잔액 조회 실패 가능. Promise.allSettled로 처리
 - KOL DB는 **read-only** 계정 (analyst_ro) — INSERT/UPDATE/DELETE 불가
 - CMC 데이터 35M+ 행 — 반드시 파티션 테이블 지정 (`getCmcPartitionTable()`) 후 쿼리, 전체 테이블 스캔 금지

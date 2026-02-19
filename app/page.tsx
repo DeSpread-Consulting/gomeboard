@@ -3,7 +3,7 @@ import React from "react";
 import DashboardClient, {
   ProjectCard,
   AutomationItem,
-} from "./DashboardClient";
+} from "./components/DashboardClient";
 import { unstable_cache } from "next/cache"; // [NEW] 캐시 함수 불러오기
 
 // 환경변수

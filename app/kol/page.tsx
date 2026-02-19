@@ -2,6 +2,8 @@ import { queryKolNodes, queryKolEdges } from "@/utils/kol-db";
 import KOLClient from "./KOLClient";
 import { GlobeAltIcon } from "@heroicons/react/24/outline";
 
+export const revalidate = 86400; // 24시간마다 재생성
+
 export default async function KOLPage() {
   try {
     const [nodes, edges] = await Promise.all([

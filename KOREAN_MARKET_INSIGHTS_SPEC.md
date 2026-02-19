@@ -1,7 +1,20 @@
-# Korean Crypto Market Insights Page - 최종 설계 스펙
+# Korean Crypto Market Pages - 설계 스펙
 
 > Gemini + Claude 협업으로 도출된 데이터 기반 페이지 설계
-> Route: `/korea-insights`
+> 두 개의 별도 페이지:
+> - `/korea-insights` — 시장 전체 인사이트/분석 (K-Narrative Intelligence)
+> - `/korea-data` — 프로젝트별 원시 데이터 스코어카드
+
+## 페이지 분류 체계
+| | `/korea-insights` | `/korea-data` |
+|---|---|---|
+| 성격 | 시장 전체 인사이트/분석 | 프로젝트별 원시 데이터 조회 |
+| 단위 | 시장 전체 | 개별 프로젝트 (ticker 선택) |
+| 목적 | Go-to-Market 전략 수립 | 프로젝트 한국 현황 스코어카드 |
+
+---
+
+# Part 1: Korea Insights (`/korea-insights`)
 
 ---
 
@@ -535,3 +548,166 @@ export async function getKolDbClient() {
 | Hidden Origin #1 Unknown | `fwd_peer_id`가 `channels` 테이블에 미등록 | LEFT JOIN → INNER JOIN 변경 |
 | `messages` 테이블 `channel_id` 오류 | 실제 컬럼명은 `chat_id` | 실제 DB information_schema 검증 후 수정 |
 | Recharts v3 PieChart 타입 오류 | typed interface에 index signature 없음 | `Record<string, unknown>[]`로 변환 |
+| `naver_news_articles` 범용 키워드만 | 11개 범용 키워드(비트코인, 가상자산 등)로만 수집, 개별 프로젝트 매칭 불가 | Korea Data에서 범용 키워드 전체 기사 표시로 전환 |
+| `project_keywords.is_active` 미존재 | 스키마 문서에 기재되나 실제 DB에 없음 (에러 42703) | 해당 필터 사용 금지, DB_SCHEMA.md에 경고 추가 |
+| PostgreSQL bigint→int 오버플로 | `channel_id::int` 등에서 에러 22003 | 모든 `::int` → `::bigint`, channel_id는 `::text` |
+
+---
+
+# Part 2: Korea Data (`/korea-data`)
+
+> 2026-02-13 생성. Gemini 3-pro-preview와 3라운드 토론으로 설계.
+> 2026-02-13 리팩토링 완료: 데이터 파이프라인 전면 재작성
+
+## 컨셉: "프로젝트별 한국 시장 스코어카드"
+해외 프로젝트팀이 한국 시장에서 개별 프로젝트의 원시 데이터를 조회할 수 있는 페이지.
+
+## 아키텍처
+- **프로젝트 선택기**: `telegram.projects` (372개) 에서 선택
+- **Pre-TGE / Post-TGE 자동 전환**: `projects.tge` 필드 기반 (boolean: true=Post-TGE, false/null=Pre-TGE)
+- **5개 스코어 카드** (각 0-100점) + 상세 데이터 탭 + 디버그 Raw Data 패널
+- **데스크톱 5열 그리드**: `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`
+- **각 스코어카드에 subtitle**: 예) "1.2K mentions", "3 exchanges"
+
+## 5개 스코어 정의 (리팩토링 후)
+
+### ① Telegram Score (커뮤니티 활동량)
+- **데이터**: `telegram.daily_channel_keyword_stats` (project_id 기반) + `hourly_channel_keyword_stats` + `channels` + `kol.nodes` + `channel_metrics`
+- **함수 시그니처**: `fetchTelegramScore(ticker: string, projectId: number)`
+- **4개 쿼리**:
+  1. 일별 멘션 (30일): `daily_channel_keyword_stats WHERE project_id = $1`
+  2. 시간별 히트맵 (7일): `hourly_channel_keyword_stats` → `EXTRACT(DOW, HOUR)` 집계
+  3. 톱 채널 (30일): `daily_channel_keyword_stats` JOIN `channels` + `kol.nodes` + `channel_metrics`
+  4. 유니크 채널 수: `COUNT(DISTINCT channel_id)`
+- **스코어 공식**:
+  - Volume (40%): `log(totalMentions+1) / log(10000) * 100`
+  - Trend (30%): `50 + mentionTrend%` (최근 7일 vs 이전 7일, clamp 0-100)
+  - Reach (30%): `uniqueChannels / 50 * 100`
+- **상세 탭** (TelegramDetail.tsx):
+  - 요약 지표: Score + Mentions 30d + Trend % + Channels
+  - 일별 멘션 LineChart (height 250)
+  - 시간별 히트맵: 7행(요일) x 24열(시간) CSS 그리드, `rgba(0,55,240, intensity)` 색상
+  - 톱 채널 테이블: # / Channel / Tier / Mentions / Subscribers / Median Views
+
+### ② SEO Score (검색 가시성)
+- **데이터**: `search_analytics.monthly_naver_search_stats` (via `project_keywords` 브릿지)
+- **함수 시그니처**: `fetchSEOScore(projectId: number)`
+- **조인 경로**: `telegram.project_keywords(project_id)` → `LOWER(keyword)` → `search_analytics.keywords(keyword)` → `monthly_naver_search_stats`
+- **공식**: log-based normalization of total_volume
+- **상세 탭** (SEODetail.tsx): 월별 네이버 검색량 추이, 콘텐츠 타입(Blog/Cafe/News/Web) 분해
+- ⚠️ tickFormatter: `String(v).slice(2)` 사용 (Recharts v3 non-string 값 대응)
+
+### ③ YouTube Score (유튜브 마인드쉐어)
+- **데이터**: `youtube.videos` + `video_metrics` + `video_keywords` + `project_keywords`
+- **함수 시그니처**: `fetchYoutubeScore(projectId: number)`
+- **공식**: (view_score * 0.7 + count_score * 0.3)
+- **상세 탭** (YoutubeDetail.tsx): 최근 30일 영상 리스트 (제목, 조회수, 좋아요)
+- ⚠️ `view_count::bigint`, `like_count::bigint` 캐스트 필수 (bigint 컬럼)
+
+### ④ News (프로젝트 무관 독립 섹션 — K-Score 미포함)
+- **데이터**: `news_scraper.naver_news_articles` (프로젝트 무관, 전체 기사)
+- **함수 시그니처**: `fetchNewsData()` (파라미터 없음)
+- **핵심**: `naver_news_articles`는 11개 범용 키워드로만 수집 → K-Score에서 제외, 페이지 하단에 항상 표시
+- **서버사이드 fetch**: `page.tsx`에서 미리 fetch하여 `KoreaDataClient`에 prop으로 전달
+- **카테고리 매핑** (`NEWS_CATEGORY_MAP`):
+  - 코인: 비트코인, 이더리움, 솔라나, 리플
+  - 산업/기술: 블록체인, NFT, 디파이, 웹3, 메타버스
+  - 시장/규제: 가상자산, 코인, 암호화폐
+- **독립 섹션** (NewsSection.tsx):
+  - 카테고리 필터 pill 버튼 (전체/코인/산업기술/시장규제)
+  - 2열 레이아웃: 기사 카드 리스트 (좌) + 일별 기사 수 차트 + 키워드 분포 (우)
+  - 기사 카드: 제목 + 키워드 배지 + 언론사 + 시간
+
+### ⑤ Exchange Score (거래소 유동성 — Post-TGE Only)
+- **데이터**: `crypto_market.cmc_exchange_market_pairs` (한국 거래소, KRW 페어 필터)
+- **함수 시그니처**: `fetchExchangeScore(ticker: string)`
+- **변경**: AVG → SUM, KRW 페어 필터 (`market_pair LIKE '%/KRW'`), depth/liquidity도 SUM
+- **공식**: volume_score * 0.6 + depth_score * 0.4
+- **상세 탭** (ExchangeDetail.tsx): 거래소별 볼륨 차트, 호가 깊이 테이블, Buy/Sell Depth 비율 + Kimchi Premium (Coming Soon)
+
+### RawDataPanel.tsx (디버그)
+- 페이지 하단 접이식 "Raw Data (Debug)" 패널
+- Meta 정보: ticker, projectId, K-Score, Post-TGE 여부
+- 5셀 그리드: 각 데이터 소스 존재 여부 (green=있음, red=null)
+- 접이식 JSON 블록: 각 데이터 소스의 전체 JSON (행 수 표시)
+
+## 종합 K-Score 가중치 (뉴스 제외, 비례 재배분)
+| 카테고리 | Pre-TGE | Post-TGE |
+|---------|---------|----------|
+| Telegram | 59% | 29% |
+| SEO | 23% | 12% |
+| YouTube | 18% | 12% |
+| Exchange | 0% | 47% |
+
+News는 K-Score에서 제외 (프로젝트 무관 데이터이므로). 페이지 하단에 항상 표시.
+데이터 없는 스코어는 N/A 처리, 나머지 가중치 자동 재분배.
+K-Score는 클라이언트에서 계산 (모든 하위 점수 도착 후 가중평균).
+
+## 크로스 스키마 연결 전략 (리팩토링 후)
+```
+telegram.projects (id, ticker)
+  → daily_channel_keyword_stats.project_id (텔레그램 멘션 — 가장 넓은 커버리지)
+  → hourly_channel_keyword_stats.project_id (시간별 히트맵)
+  → project_keywords.project_id → LOWER(keyword) → search_analytics.keywords (SEO)
+  → project_keywords.project_id → LOWER(keyword) → youtube.keywords (유튜브)
+  → currencies.symbol = ticker (거래소 데이터 연결)
+
+news_scraper.naver_news_articles
+  → 프로젝트 연결 없음 (범용 키워드 기반 전체 기사)
+  → search_keyword로 분류 (비트코인, 가상자산, 블록체인 등 11개)
+```
+
+⚠️ **사용하지 않는 경로 (폐기)**:
+- ~~`tracking_keyword_groups.name = ticker` → `tracking_keywords` → `search_analytics.keywords`~~ (65개 그룹 병목)
+- ~~`storyteller_message_grades`~~ (17.5% 커버리지 — 별도 storyteller 전용)
+- ~~`project_keywords` → `naver_news_articles`~~ (11개 범용 키워드만 수집, 개별 프로젝트 매칭 불가)
+
+## SECTOR_MAP (코드 내 상수)
+뉴스가 범용 키워드 기반이므로 섹터 분류는 코드 내 `SECTOR_MAP` 상수로 관리:
+```typescript
+const SECTOR_MAP: Record<string, string> = {
+  BTC: "L1", ETH: "L1", SOL: "L1", AVAX: "L1", SUI: "L1", APT: "L1", ...
+  OP: "L2", ARB: "L2", MATIC: "L2", ...
+  UNI: "DeFi", AAVE: "DeFi", ...
+  AXS: "Gaming", SAND: "Gaming", ...
+  FET: "AI", RNDR: "AI", ...
+  DOGE: "Meme", PEPE: "Meme", ...
+  LINK: "Infra", GRT: "Infra", ...
+};
+```
+
+## 기술 이슈 & 해결
+
+| 이슈 | 원인 | 해결 |
+|------|------|------|
+| Telegram 대부분 null | `storyteller_message_grades` 65/372 프로젝트만 커버 (17.5%) | `daily_channel_keyword_stats` (project_id 기반, 전체 커버) 사용 |
+| `daily_keyword_stats` 매칭 실패 | ticker 기반 매칭 불안정 | `_channel_` 버전 (project_id 기반) 전환 |
+| SEO 65개만 커버 | `tracking_keyword_groups` 병목 (65행) | `project_keywords` 브릿지 (714행) 사용 |
+| PostgreSQL 에러 22003 | `channel_id::int`에서 bigint→int 오버플로 (int84 루틴) | 모든 `::int` → `::bigint`, channel_id는 `::text` |
+| `project_keywords.is_active` 에러 | 스키마 문서에 기재되나 실제 DB에 미존재 (42703) | is_active 필터 제거, DB_SCHEMA.md에 경고 추가 |
+| News 대부분 null (ZRO 등) | `naver_news_articles`는 11개 범용 키워드만 수집 | 범용 키워드 기반 전체 기사 표시로 전환 |
+| SEODetail `v.slice` 에러 | Recharts v3 tickFormatter에 non-string 전달 | `(v) => String(v).slice(2)` |
+| YouTube view_count 오버플로 | `view_count`, `like_count`가 bigint 컬럼 | `::bigint` 캐스트 |
+| `nna.link` 컬럼 미존재 | 실제 컬럼명은 `url` | `nna.link` → `nna.url` 수정 |
+
+## 구현 이력
+
+| 날짜 | 내용 | 상태 |
+|------|------|------|
+| 2026-02-13 | 초기 구현 (Gemini 설계 기반) | ✅ 완료 |
+| 2026-02-13 | 리팩토링: Telegram → daily_channel_keyword_stats | ✅ 완료 |
+| 2026-02-13 | 리팩토링: SEO → project_keywords 브릿지 | ✅ 완료 |
+| 2026-02-13 | 리팩토링: News → 범용 키워드 전체 기사 | ✅ 완료 |
+| 2026-02-13 | bigint 오버플로 수정 (전체 파일) | ✅ 완료 |
+| 2026-02-13 | RawDataPanel 디버그 패널 추가 | ✅ 완료 |
+| 2026-02-13 | UI 리팩토링: 5열 그리드, subtitle, 히트맵, 톱 채널 테이블 | ✅ 완료 |
+| 2026-02-13 | Recharts v3 tickFormatter 수정 | ✅ 완료 |
+| 2026-02-13 | is_active 필터 제거 (DB 미존재 확인) | ✅ 완료 |
+| 2026-02-19 | 점진적 로딩: 개별 ScoreCard 독립 fetch + 클라이언트 K-Score 계산 | ✅ 완료 |
+| 2026-02-19 | 뉴스 독립 분리: K-Score 제외, 하단 항상 표시, 카테고리 필터 | ✅ 완료 |
+| 2026-02-19 | 거래소 유동성 수정: AVG→SUM + KRW 페어 필터 | ✅ 완료 |
+| 2026-02-19 | Telegram High Impact Mentions 추가 | ✅ 완료 |
+| 2026-02-19 | YouTube 링크 추가 (video_id) | ✅ 완료 |
+| 2026-02-19 | SEO Naver 검색 링크 추가 | ✅ 완료 |
+| 2026-02-19 | Kimchi Premium placeholder 추가 | ✅ 완료 |
+| 2026-02-19 | 스켈레톤 UI (미선택 + 로딩 중) | ✅ 완료 |
